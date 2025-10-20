@@ -112,7 +112,7 @@ const Home = () => {
 
   return (
     <div className="home">
-      <section className="hero">
+      <section className="hero mt-50">
         {heroImages.map((image, index) => (
           <div
             key={index}
@@ -121,9 +121,9 @@ const Home = () => {
           />
         ))}
         <div className="hero-overlay"></div>
-        <div className="hero-content animate-fade-in-up">
+        <div className="hero-content animate-fade-in-up ">
           <h1 className="hero-title">Your family's Home </h1>
-          <h1 className="hero-title1">Away From Home</h1>
+          <h1 className="hero-title1 ">Away From Home</h1>
           <p className="hero-description">Crafted For Families, Designed For Comfort</p>
           <h2 className="hero-subtitle">A.M. Comfort Inn</h2>
         </div>
