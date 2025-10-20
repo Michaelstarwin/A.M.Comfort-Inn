@@ -4,7 +4,8 @@
 
 .hero {
   position: relative;
-  height: 100vh;
+  height: calc(100vh - 80px);
+  margin-top: 80px;
   overflow: hidden;
 }
 
@@ -55,6 +56,7 @@
   text-align: center;
   color: var(--white);
   padding: 0 20px;
+  gap: 30px;
 }
 
 .hero-title {
@@ -397,29 +399,129 @@
 
 @media (max-width: 768px) {
   .hero-title {
-    font-size: 2rem;
+    font-size: 3rem;
+  }
+
+  .hero-title1 {
+    font-size: 3rem;
   }
 
   .hero-subtitle {
-    font-size: 1.5rem;
+    font-size: 2rem;
   }
 
   .hero-description {
-    font-size: 1rem;
+    font-size: 1.2rem;
   }
 
   .section-title {
-    font-size: 2rem;
+    font-size: 2.2rem;
+  }
+
+  .rooms-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+
+  .tourist-grid {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  }
+
+  .reviews-grid {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+
+}
+@media (max-width: 480px) {
+  .hero-title {
+    font-size: 1.5rem;
+    margin-bottom: -30px;
+  }
+
+  .hero-title1 {
+    font-size: 1.5rem;
+    margin-bottom: -10px;
+  }
+
+  .hero-subtitle {
+    font-size: 1.2rem;
+  }
+
+  .hero-description {
+    font-size: 0.9rem;
+    margin-bottom: 100px;
+  }
+
+  .section-title {
+    font-size: 1.8rem;
+    margin-bottom: 30px;
+  }
+
+  .section-title::after {
+    width: 80px;
   }
 
   .rooms-grid,
   .tourist-grid,
   .reviews-grid {
-    grid-template-columns: 1fr;
+    gap: 20px;
   }
 
   .facilities-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 20px;
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .facility-item {
+    padding: 15px 10px;
+  }
+
+  .facility-icon {
+    margin-bottom: 10px;
+  }
+
+  .facility-item p {
+    font-size: 0.9rem;
+  }
+
+  .tourist-grid {
+    gap: 15px;
+  }
+
+  .tourist-image {
+    height: 150px;
+  }
+
+  .tourist-overlay h3 {
+    font-size: 1rem;
+  }
+
+  .review-card {
+    padding: 15px;
+  }
+
+  .review-text {
+    font-size: 1rem;
+  }
+
+  .review-author h4 {
+    font-size: 1rem;
+  }
+
+  .review-author p {
+    font-size: 0.9rem;
+  }
+
+  .room-price {
+    font-size: 1.5rem;
+  }
+
+  .room-price span {
+    font-size: 0.9rem;
+  }
+
+  .btn-primary,
+  .btn-secondary {
+    padding: 10px 20px;
+    font-size: 0.9rem;
   }
 }
