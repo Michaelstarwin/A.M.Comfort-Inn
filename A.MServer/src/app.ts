@@ -1,62 +1,79 @@
-import express, { Express, Request, Response } from "express";
+import express, { Express, Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import path from "path";
+import cors from "cors";
+
+// Import routes
+import bookingRoutes from './modules/booking/booking.route';
+import transactionRoutes from './modules/transaction/transaction.route';
+
+// For async error handling
+import "express-async-errors";
 
 dotenv.config();
 
 const app: Express = express();
 const host = process.env.APP_HOST || 'localhost';
-const port = process.env.APP_PORT || 7700;
+const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
 
+// --- Core Middleware ---
+// Enable CORS with default options
+app.use(cors());
+// Parse JSON bodies
 app.use(express.json());
-app.use(express.urlencoded());
+// Parse URL-encoded bodies
+app.use(express.urlencoded({ extended: true }));
 
-//Express configuration.
+// Express configuration
 app.set("host", host);
 app.set("port", port);
 
-//Using custom cors policy
-app.use((req, res, next) => {
-  res.append('Access-Control-Allow-Origin', '*');
-  res.append('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE');
-  res.append('Access-Control-Allow-Headers', '*');
-  next();
-});
+
+// --- API Routes ---
+app.use('/api/bookings', bookingRoutes);
+app.use('/api/transactions', transactionRoutes);
 
 
-app.get("/", (req: Request, res: Response) => {
-  res.send("Express + TypeScript Server");
-});
-
-
-const qrApi = require('./modules/scan/scan.route');
-const userApi = require('./modules/user/user.route');
-const adminAuthApi = require('./modules/admin/admin.route');
-const productApi = require('./modules/product/product.route');
-const purchaseApi = require("./modules/purchase/purchase.route");
-const  transactionApi = require('./modules/transaction/transaction.route')
-const tokenApi = require('./modules/token/token.route')
-const orderApi = require('./modules/user/[userId]/orderhistory.route');
-
-
-app.use('/api', qrApi);
-app.use('/api/users', userApi);
-app.use('/api/admin-auth', adminAuthApi);
-app.use('/api/products',productApi)
-app.use("/api/purchases", purchaseApi);
-app.use('/api/transactions', transactionApi);
-app.use('/api/tokens', tokenApi);
-app.use('/api',orderApi);
-
+// --- Static Assets ---
+// Serve uploaded files
 app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 
-app.listen(app.get("port"), () => {
+
+// --- Health Check Endpoint ---
+app.get("/", (req: Request, res: Response) => {
+  res.status(200).json({
+    status: "success",
+    message: "Welcome to A.M. Comfort Inn API"
+  });
+});
+
+// --- Global Error Handler ---
+// Must be the last middleware
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+    console.error(err.stack); // Log the error stack for debugging
+
+    // Handle known error types, e.g., validation errors
+    if (err.name === 'ZodError') {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Invalid input data',
+            errors: JSON.parse(err.message)
+        });
+    }
+
+    // Generic fallback error
+    res.status(500).json({
+        status: 'error',
+        message: err.message || "An unexpected error occurred."
+    });
+});
+
+
+// --- Server Activation ---
+app.listen(port, host, () => {
   console.log(
-    "Server started at %s : %d ",
-    app.get("host"),
-    app.get("port"),
+    `✅ Server is running at http://${host}:${port}`
   );
 });
 
-module.exports = app;
- 
+export default app;

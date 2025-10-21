@@ -1,17 +1,17 @@
 import express from 'express';
-import { createTransaction } from './transaction.service';
+import * as TransactionService from './transaction.service';
+import { validate } from '../../shared/lib/utils/validate.middleware';
+import { createTransactionSchema } from './transaction.types';
 
 const router = express.Router();
 
-router.post('/', async (req, res) => {
-  try {
-    const { userId, items, totalAmount } = req.body;
-    const result = await createTransaction(userId, items, totalAmount);
-    res.status(201).json(result);
-  } catch (error: any) {
-    console.error('Transaction error:', error.message);
-    res.status(500).json({ error: error.message });
-  }
+router.post('/', validate(createTransactionSchema), async (req, res) => {
+    const result = await TransactionService.createTransaction(req.body);
+    res.status(201).json({
+        success: true,
+        message: 'Transaction completed successfully.',
+        data: result
+    });
 });
 
-module.exports = router;
+export default router;
