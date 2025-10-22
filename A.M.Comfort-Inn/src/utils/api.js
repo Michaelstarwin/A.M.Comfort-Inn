@@ -1,6 +1,5 @@
 // API client utility for making HTTP requests to the backend
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:7700/api';
-
 class ApiClient {
   constructor(baseURL) {
     this.baseURL = baseURL;
