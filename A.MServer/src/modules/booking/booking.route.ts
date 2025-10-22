@@ -36,10 +36,17 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
 });
 
 // FR 3.4: Payment Confirmation via Webhook
-router.post('/payment/cashfree-webhook', async (req, res) => {
-    // Note: Signature verification happens inside the service
-    await BookingService.handleCashfreeWebhook(req.body, req.headers['x-webhook-signature'] as string);
-    res.status(200).send({ status: 'success' }); // Acknowledge webhook
+router.post('/payment/cashfree-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+    try {
+        const rawBody = req.body.toString(); // Convert buffer to string
+        await BookingService.handleCashfreeWebhook(rawBody, req.headers); // Pass headers too
+        res.status(200).send({ status: 'success' });
+    } catch (error: any) {
+        console.error('Webhook processing error:', error);
+        // Use 401 for signature errors, 400/500 for others
+        const statusCode = error.message.includes("Invalid webhook signature") ? 401 : 500;
+        res.status(statusCode).send({ status: 'error', message: error.message });
+    }
 });
 
 // Get final booking details by reference number

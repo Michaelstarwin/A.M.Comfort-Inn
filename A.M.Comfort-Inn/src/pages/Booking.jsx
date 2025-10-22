@@ -6,20 +6,43 @@ import { AvailabilityStep } from "./Booking/AvailabilityStep";
 import { GuestDetailsStep } from "./Booking/GuestDetails";
 import { ReviewStep } from "./Booking/ReviewStep";
 
-// This is where you would load the Cashfree SDK
-// const loadCashfree = (orderData) => {
-//  console.log("Loading Cashfree with:", orderData);
-//  // const cashfree = new Cashfree(orderData.signature);
-// // cashfree.initialise(orderData.orderId);
-//  // cashfree.processPayment();
-//  toast.success('Redirecting to payment gateway!');
+// Function to initialize Cashfree payment
+// const initiateCashfreePayment = (orderData) => {
+//   if (window.Cashfree) {
+//     const cashfree = new window.Cashfree({
+//       mode: "sandbox", // Change to "production" for live
+//     });
+
+//     cashfree.checkout({
+//       paymentSessionId: orderData.payment_session_id, // Assuming backend provides this
+//       redirectTarget: "_self", // Redirect in same tab
+//     });
+//   } else {
+//     console.error("Cashfree SDK not loaded");
+//     toast.error("Payment gateway not available. Please try again.");
+//   }
+// };
+
+// Load Cashfree SDK
+// const loadCashfreeSDK = () => {
+//   if (!window.Cashfree) {
+//     const script = document.createElement('script');
+//     script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
+//     script.async = true;
+//     document.head.appendChild(script);
+//   }
 // };
 
 const Booking = () => {
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [availabilityData, setAvailabilityData] = useState(null);
-  const [guestData, setGuestData] = useState(null); // 1. Called when AvailabilityStep is successful
+  const [guestData, setGuestData] = useState(null);
+
+  // Load Cashfree SDK on component mount
+  // React.useEffect(() => {
+  //   loadCashfreeSDK();
+  // }, []); // 1. Called when AvailabilityStep is successful
 
   const handleAvailabilitySuccess = (data) => {
     setAvailabilityData(data);
@@ -70,16 +93,56 @@ const Booking = () => {
         );
       }
       toast.dismiss(); // Clear all loading toasts
-      setIsLoading(false); // This is the data from your backend (orderId, signature, etc.)
+     // setIsLoading(false); // This is the data from your backend (orderId, signature, etc.)
 
-      const paymentData = orderResponse.data; // TODO: Pass paymentData to the Cashfree SDK loader // loadCashfree(paymentData);
-      console.log("Proceed to payment with:", paymentData);
-      toast.success("Your order is ready. Redirecting to payment..."); // For demo: reset after 3 seconds
-      setTimeout(() => {
-        setCurrentStep(1);
-        setAvailabilityData(null);
-        setGuestData(null);
-      }, 3000);
+      const { payment_session_id } = orderResponse.data;
+      if (!window.Cashfree) {
+          console.error("Cashfree SDK not loaded");
+          toast.error("Payment gateway is not available. Please try again later.");
+          setIsLoading(false);
+          return;
+        }
+
+        const cashfree = new window.Cashfree({
+          mode: "sandbox", // Change to "production" for live
+        });
+
+        toast.loading('Redirecting to payment...'); // Show loading toast *before* checkout
+
+        cashfree.checkout({
+          paymentSessionId: payment_session_id,
+        }).then((result) => {
+          // This .then() block runs *after* the popup closes or redirects
+          toast.dismiss(); // Clear the loading toast
+          setIsLoading(false); 
+          
+          if (result.error) {
+            toast.error(result.error.message || "Payment failed.");
+            console.error("Payment Error:", result.error);
+            // Maybe reset to step 1 or allow retry?
+            // setCurrentStep(1); 
+          }
+          if (result.redirect) {
+            // Usually nothing needed here if relying on webhook + return_url
+            console.log("Redirecting for bank authentication...");
+          }
+          if (result.paymentDetails) {
+            // Optional: Show immediate feedback, but webhook is the source of truth
+            console.log("Payment details received on client:", result.paymentDetails);
+            toast.success("Payment submitted! Awaiting final confirmation.");
+            // You might redirect based on your return_url here if needed,
+            // but the PaymentStatus component needs rethinking (see point 2)
+          }
+        }).catch(err => {
+            // Catch errors during the checkout initiation itself
+            toast.dismiss();
+            setIsLoading(false);
+            console.error("Cashfree checkout initiation error:", err);
+            toast.error("Could not start payment process. Please try again.");
+        });
+      // console.log("Proceed to payment with:", paymentData);
+      // toast.success("Your order is ready. Redirecting to payment...");
+      // initiateCashfreePayment(paymentData);
     } catch (error) {
       toast.dismiss();
       toast.error(error.message || "An unknown error occurred.");

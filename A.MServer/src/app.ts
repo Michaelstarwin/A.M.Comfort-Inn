@@ -31,7 +31,7 @@ app.set("port", port);
 
 // --- API Routes ---
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/transactions', transactionRoutes);
+app.use('/api/transactions', express.json(), transactionRoutes);
 
 
 // --- Static Assets ---

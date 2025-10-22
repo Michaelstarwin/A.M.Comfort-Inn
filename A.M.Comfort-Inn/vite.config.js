@@ -8,11 +8,9 @@ export default defineConfig({
   ],
   theme: {
     extend: {
-      // Add your custom fonts here
       fontFamily: {
         playfair: ['"Playfair Display"', 'serif'], 
       },
-      // Add your custom colors
       colors: {
         'primary-blue': '#030389',
         'orange': {
@@ -21,11 +19,9 @@ export default defineConfig({
         },
         'text-dark': '#2c3e50',
       },
-      // Z-index for navbar
       zIndex: {
         '1000': '1000',
       },
-      // --- ADD THIS SECTION FOR THE ANIMATION ---
       keyframes: {
         kenburns: {
           '0%': { transform: 'scale(1)' },
@@ -40,7 +36,6 @@ export default defineConfig({
         kenburns: 'kenburns 20s ease-in-out infinite alternate',
         'fade-in-up': 'fadeInUp 0.8s ease-out forwards',
       }
-      // --- END OF NEW SECTION ---
     },
   },
 })

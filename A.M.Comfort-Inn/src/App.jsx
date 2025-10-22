@@ -5,6 +5,7 @@ import Footer from './components/Footer.jsx';
 import Home from './pages/Home.jsx';
 import Gallery from './pages/Gallery.jsx';
 import Booking from './pages/Booking.jsx';
+import { PaymentStatus } from './pages/Booking/PaymentStatus.jsx';
 import AdminDashboard from './pages/Admin/AdminDashboard.jsx';
 import { AdminLoginPrompt } from './components/admin/AdminLoginPrompt.jsx';
 
@@ -16,6 +17,7 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/booking" element={<Booking />} />
+        <Route path="/booking/payment-status" element={<PaymentStatus />} />
         <Route path="/admin/*" element={<AdminDashboard />} />
       </Routes>
       <Footer />
