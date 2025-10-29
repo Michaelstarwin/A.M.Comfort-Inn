@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wifi, Wind, Bed, ChefHat, Car, Droplets, Camera, Trash2, HeadphonesIcon, Phone, Tv, Star } from 'lucide-react';
+import { Wifi, Wind, Bed, ChefHat, Car, Droplets, Camera, Trash2, HeadphonesIcon, Phone, Tv, Star, CardSim } from 'lucide-react';
 // We no longer import Home.css
 
 // Import your new, smaller components
@@ -19,19 +19,19 @@ const heroImages = [
 const rooms = [
   {
     id: 1,
-    name: 'Standard Family Room',
+    name: 'Standard Room',
     image: '/Image5.jpeg',
-    description: 'Ideal for small families or couples seeking a cozy, budget-friendly stay.',
-    price: '₹3,500',
-    amenities: ['Private Bedroom', 'Shared Hall & Kitchen', 'Air Conditioning', 'Free Wi-Fi']
+    description: 'Comfortable and affordable room perfect for couples or small families.',
+    price: '₹1,800',
+    amenities: ['Private Bedroom', 'Air Conditioning', 'Free Wi-Fi', 'Attached Bathroom']
   },
   {
     id: 2,
-    name: 'Family Suite (2 BHK)',
+    name: 'Deluxe Room',
     image: '/Image1.jpeg',
-    description: 'Spacious comfort for families who love privacy and togetherness.',
-    price: '₹4,500',
-    amenities: ['2 Bedrooms', 'Private Living Hall', 'Full Kitchen', 'Air Conditioning', 'Free Wi-Fi']
+    description: 'Spacious and luxurious room with premium amenities for a memorable stay.',
+    price: '₹2,500',
+    amenities: ['King Size Bed', 'Private Balcony', 'Air Conditioning', 'Free Wi-Fi', 'Mini Fridge', '2 Double Bedroom', "Full kitchen",'Covered Car Parking']
   }
 ];
 
@@ -46,7 +46,8 @@ const facilities = [
   { icon: Trash2, name: 'Daily Cleaning' },
   { icon: HeadphonesIcon, name: '24/7 Support' },
   { icon: Phone, name: 'Cab Service' },
-  { icon: Tv, name: 'In-room TV' }
+  { icon: Tv, name: 'In-room TV' },
+  { icon: Car, name: 'Covered Car Parking' }
 ];
 
 // SIMPLIFIED: All tourist spots in one array
@@ -80,7 +81,7 @@ const Home = () => {
       {/* Rooms Section */}
       <section className="py-16 md:py-24 bg-gray-100">
         <div className="max-w-7xl mx-auto px-5">
-          <SectionTitle>Our Family-Friendly Stays</SectionTitle>
+          <SectionTitle>Our Rooms</SectionTitle>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
             {rooms.map((room, index) => (
               <RoomCard 
@@ -91,7 +92,7 @@ const Home = () => {
             ))}
           </div>
           <div className="text-center mt-12">
-            <Link to="/gallery" className="bg-primary-blue text-white px-8 py-3 rounded-md font-semibold text-lg transition-all duration-300 hover:bg-blue-900 hover:-translate-y-0.5 hover:shadow-lg">
+            <Link to="/gallery" className="bg-primary-blue text-black hover:text-white px-8 py-3 rounded-md font-semibold text-lg transition-all duration-300 border-2 border-blue-900 hover:bg-blue-900 hover:-translate-y-0.5 hover:shadow-lg">
               Explore All Rooms
             </Link>
           </div>

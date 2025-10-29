@@ -19,7 +19,7 @@ export const RoomCard = ({ room, delay }) => (
       
       <div className="flex flex-wrap gap-2 mb-5">
         {room.amenities.map((amenity, i) => (
-          <span key={i} className="bg-primary-blue/10 text-primary-blue text-xs font-semibold px-3 py-1 rounded-full">
+          <span key={i} className="bg-orange-400 text-white text-xs font-semibold px-3 py-1 rounded-full">
             {amenity}
           </span>
         ))}

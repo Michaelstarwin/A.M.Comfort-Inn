@@ -22,8 +22,8 @@ export const ReviewStep = ({ availabilityData, guestData, onConfirm, onBack, isL
       
       <div className="bg-gray-50 rounded-lg p-4 mb-6">
         <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Summary</h3>
-        <DetailItem label="Check-in" value={`${availabilityData.checkInDate} @ ${availabilityData.checkInTime}`} />
-        <DetailItem label="Check-out" value={`${availabilityData.checkOutDate} @ ${availabilityData.checkOutTime}`} />
+        <DetailItem label="Check-in" value={`${availabilityData.checkInDate} @ 12:00 PM`} />
+        <DetailItem label="Check-out" value={`${availabilityData.checkOutDate} @ 11:00 PM`} />
         <DetailItem label="Room Type" value={availabilityData.roomType} />
         <DetailItem label="Rooms" value={availabilityData.roomCount} />
         <DetailItem label="Rate per Night" value={`₹${availabilityData.ratePerNight.toLocaleString()}`} />
