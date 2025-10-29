@@ -8,6 +8,7 @@ import Booking from './pages/Booking.jsx';
 import { PaymentStatus } from './pages/Booking/PaymentStatus.jsx';
 import AdminDashboard from './pages/Admin/AdminDashboard.jsx';
 import { AdminLoginPrompt } from './components/admin/AdminLoginPrompt.jsx';
+import Contact from './pages/contact/Contact.jsx';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/gallery" element={<Gallery />} />
         <Route path="/booking" element={<Booking />} />
         <Route path="/booking/payment-status" element={<PaymentStatus />} />
+         <Route path="/contact-us" element={<Contact/>} />
         <Route path="/admin/*" element={<AdminDashboard />} />
       </Routes>
       <Footer />

@@ -10,12 +10,23 @@ export const PaymentStatus = () => {
   useEffect(() => {
     // Get parameters from Cashfree redirect URL
     const orderId = searchParams.get('order_id');
+    const orderStatus = searchParams.get('order_status');
 
     if (orderId) {
-      // Check booking status by making an API call to get the booking details
-      // For now, we'll show a generic success message since webhook handles the actual confirmation
-      setMessage('Thank you for your payment! Your booking is being processed and you will receive a confirmation email shortly.');
-      setIsError(false);
+      if (orderStatus === 'SUCCESS') {
+        setMessage('Thank you for your payment! Your booking is being processed and you will receive a confirmation email shortly.');
+        setIsError(false);
+      } else if (orderStatus === 'CANCELLED') {
+        setMessage('Your payment was cancelled. You can try booking again.');
+        setIsError(true);
+      } else if (orderStatus === 'FAILED') {
+        setMessage('Your payment failed. Please try again.');
+        setIsError(true);
+      } else {
+        // Default to success if status is not provided but order_id is present
+        setMessage('Thank you for your payment! Your booking is being processed and you will receive a confirmation email shortly.');
+        setIsError(false);
+      }
     } else {
       setMessage('There was an issue processing your payment return status.');
       setIsError(true);

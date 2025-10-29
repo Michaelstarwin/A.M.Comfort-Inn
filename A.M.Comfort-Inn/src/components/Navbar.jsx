@@ -66,6 +66,24 @@ const Navbar = () => {
           >
             Gallery
           </Link>
+          <Link 
+            to="/facilities" 
+            className={`${navLinkBaseClasses} ${isLinkActive('/facilities') ? navLinkActiveClasses : navLinkInactiveClasses}`}
+          >
+            Facilities
+          </Link>
+          <Link 
+            to="/tourist-spots" 
+            className={`${navLinkBaseClasses} ${isLinkActive('/tourist-spots') ? navLinkActiveClasses : navLinkInactiveClasses}`}
+          >
+            Tourist Spots
+          </Link>
+          <Link 
+            to="/contact-us" 
+            className={`${navLinkBaseClasses} ${isLinkActive('/contact-us') ? navLinkActiveClasses : navLinkInactiveClasses}`}
+          >
+            Contact us
+          </Link>
           
           {/* .navbar-btn */}
           <Link 
@@ -92,6 +110,24 @@ const Navbar = () => {
             className={`text-2xl font-medium ${isLinkActive('/gallery') ? 'text-orange-500' : 'text-black'}`}
           >
             Gallery
+          </Link>
+          <Link 
+            to="/facilities" 
+            className={`text-2xl font-medium ${isLinkActive('/facilities') ? 'text-orange-500' : 'text-black'}`}
+          >
+            Facilities
+          </Link>
+          <Link 
+            to="/tourist-spots" 
+            className={`text-2xl font-medium ${isLinkActive('/tourist-spots') ? 'text-orange-500' : 'text-black'}`}
+          >
+            Tourist Spots
+          </Link>
+          <Link 
+            to="/contact-us" 
+            className={`text-2xl font-medium ${isLinkActive('/contact-us') ? 'text-orange-500' : 'text-black'}`}
+          >
+            Contact us
           </Link>
           
           {/* .navbar-btn (Mobile) */}

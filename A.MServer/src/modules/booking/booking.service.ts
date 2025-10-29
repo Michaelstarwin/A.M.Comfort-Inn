@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'; // Keep this if db isn't globally
 import crypto from 'crypto';
 import { CheckAvailabilityRequest, PreBookRequest, CreateOrderRequest, CreateRoomRequest, UpdateRoomRequest } from './booking.validation';
 import { db } from '../../shared/lib/db'; // Use the shared instance
+import { sendBookingConfirmationEmail } from '../../shared/lib/utils/sendEmail';
 
 // --- Read ALL credentials from .env ---
 // Ensure these variable names EXACTLY match your .env file
@@ -249,8 +250,6 @@ export async function handleCashfreeWebhook(rawBody: string, headers: any) {
     
     if (!booking) {
         console.error(`Webhook received for unknown Cashfree Order ID: ${order_id}`);
-        // Return success to Cashfree, but log the error. Don't throw.
-        // Throwing would cause Cashfree to retry, but we can't process it anyway.
         return; 
     }
     
@@ -288,8 +287,28 @@ export async function handleCashfreeWebhook(rawBody: string, headers: any) {
 
         if (updatedBooking.paymentStatus === 'Success') {
             console.log(`Booking ${updatedBooking.bookingId} confirmed successfully. Sending notifications.`);
-            // TODO: Implement email/SMS notification
-            // await sendBookingConfirmationEmail(updatedBooking);
+            // Send booking confirmation email
+            try {
+                const guestInfo = updatedBooking.guestInfo as { email: string; fullName: string };
+                if (guestInfo?.email) {
+                    await sendBookingConfirmationEmail(guestInfo.email, {
+                        bookingId: updatedBooking.bookingId,
+                        checkInDate: updatedBooking.checkInDate.toISOString().split('T')[0],
+                        checkInTime: '12:00:00',
+                        checkOutDate: updatedBooking.checkOutDate.toISOString().split('T')[0],
+                        checkOutTime: '23:00:00',
+                        roomType: updatedBooking.roomType,
+                        roomCount: updatedBooking.roomCount,
+                        totalAmount: updatedBooking.totalAmount,
+                        guestInfo: guestInfo,
+                    });
+                    console.log(`Confirmation email sent to ${guestInfo.email}`);
+                } else {
+                    console.error('Guest info or email missing for booking confirmation email');
+                }
+            } catch (emailError) {
+                console.error('Failed to send confirmation email:', emailError);
+            }
         } else {
              console.log(`Booking ${updatedBooking.bookingId} marked as Failed.`);
         }
