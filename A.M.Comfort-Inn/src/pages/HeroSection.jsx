@@ -29,7 +29,7 @@ export const HeroSection = ({ images }) => {
       ))}
 
       {/* Overlay */}
-      <div className="absolute inset-0 bg-black/60 z-10" />
+      <div className="absolute inset-0 bg-black/40 z-10" />
 
       {/* Content */}
       <div className="relative z-20 h-full flex flex-col justify-center items-center text-center text-white p-5 gap-4">
@@ -38,13 +38,16 @@ export const HeroSection = ({ images }) => {
           Home Away From Home
         </h1>
         <img
-          src="/A.M. Comfort Inn.png"
+          src="/Comfort.png"
           alt="A.M. Comfort Inn Logo"
-          className="h-40 rounded-lg transition-transform duration-300 hover:scale-105 shadow-2xl animate-fade-in-up mt-10"
+          className="h-40 rounded-lg transition-transform duration-300 hover:scale-105 shadow-2xl animate-fade-in-up mt-10 "
           style={{ animationDelay: "0.6s" }} // Apply a delay to appear after the headline
         />
-       
+       <h1 className="text-2xl sm:text-2xl md:text-2xl text-shadow-md animate-fade-in-up font-playfair mt-3">
+           Crafted For Families, Designed For Comfort 
+        </h1>
       </div>
+      
 
       {/* Indicators */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-30 flex gap-2.5">

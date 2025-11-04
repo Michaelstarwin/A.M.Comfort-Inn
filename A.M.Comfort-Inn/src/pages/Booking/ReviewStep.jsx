@@ -16,6 +16,32 @@ export const ReviewStep = ({ availabilityData, guestData, onConfirm, onBack, isL
     );
   }
 
+  const handleConfirm = async () => {
+    // In the background, submit the data to Web3Forms
+    try {
+      const web3formData = {
+        access_key: '7b3b08f7-6d24-464a-9781-7fb7effb590e',
+        subject: 'New Booking Confirmation from A.M. Comfort Inn',
+        ...guestData,
+        ...availabilityData,
+      };
+
+      await fetch('https://api.web3forms.com/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(web3formData),
+      });
+    } catch (error) {
+      console.error('Failed to submit booking details to Web3Forms:', error);
+    }
+
+    // Proceed with the original confirmation logic
+    onConfirm();
+  };
+
   return (
     <div className="p-6 md:p-8">
       <h2 className="text-2xl font-semibold text-gray-800 mb-6">Step 3: Review & Confirm</h2>
@@ -49,7 +75,7 @@ export const ReviewStep = ({ availabilityData, guestData, onConfirm, onBack, isL
           Back
         </button>
         <button 
-          onClick={onConfirm} 
+          onClick={handleConfirm} 
           className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition duration-300 disabled:opacity-50"
           disabled={isLoading}
         >
