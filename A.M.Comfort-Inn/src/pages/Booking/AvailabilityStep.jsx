@@ -86,7 +86,7 @@ export const AvailabilityStep = ({ onSuccess }) => {
           </FormSelect>
           {roomType && (
             <div className="mt-2 p-3 bg-gray-100 rounded-md">
-              <p className="text-sm text-gray-700">{rooms.find(r => r.name === roomType)?.description}</p>
+              <p className="text-sm text-red-500">{rooms.find(r => r.name === roomType)?.description}</p>
             </div>
           )}
         </div>
