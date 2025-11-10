@@ -23,8 +23,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
   });
 
   const rooms = [
-    { name: 'Standard Room', description: 'Comfortable and affordable room perfect for couples or small families.' },
-    { name: 'Deluxe Room', description: 'Spacious and luxurious room with premium amenities for a memorable stay.' }
+    { name: 'Standard Room', description: '1 Private Bedroom, Shared kitchen and Hall.' },
+    { name: 'Deluxe Room', description: '2 BHK' }
   ];
 
   const roomType = watch('roomType');

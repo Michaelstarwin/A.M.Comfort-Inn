@@ -22,16 +22,16 @@ const rooms = [
     name: 'Standard Room',
     image: '/Image5.jpeg',
     description: 'Comfortable and affordable room perfect for couples or small families.',
-    price: '₹1,800',
-    amenities: ['Private Bedroom', 'Air Conditioning', 'Free Wi-Fi', '24/7 Water Supply', 'Shared Hall & Kitchen', 'Attached Bathroom']
+    price: '₹3,500',
+    amenities: ['1 Private Bedroom', 'Air Conditioning', 'Free Wi-Fi', '24/7 Water Supply', 'Shared Hall & Kitchen', 'Attached Bathroom']
   },
   {
     id: 2,
     name: 'Deluxe Room',
     image: '/Bedroom.jpeg',
     description: 'Spacious and luxurious room with premium amenities for a memorable stay.',
-    price: '₹2,500',
-    amenities: ['King Size Bed', 'Private Balcony', 'Air Conditioning', 'Free Wi-Fi', 'Mini Fridge', '2 Double Bedroom', "Full kitchen",'Covered Car Parking']
+    price: '₹4,500',
+    amenities: ['2 Double Bedroom','King Size Bed', 'Private Balcony', 'Air Conditioning', 'Free Wi-Fi', 'Mini Fridge', "Full kitchen",'Covered Car Parking']
   }
 ];
 
