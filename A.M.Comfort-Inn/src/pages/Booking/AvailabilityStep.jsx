@@ -29,6 +29,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
       setValue('roomCount', 1);
     } else if (roomType === 'Deluxe Room') {
       setValue('roomCount', 2);
+    } else { // When no room type is selected
+      setValue('roomCount', 0);
     }
   }, [roomType, setValue]);
 
