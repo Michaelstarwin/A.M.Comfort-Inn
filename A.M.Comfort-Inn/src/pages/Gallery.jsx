@@ -6,74 +6,74 @@ import { Link } from 'react-router-dom';
 const rooms = [
   {
     id: 1,
-    name: 'Spacious Family Bedroom',
-    description: 'A cozy room designed for restful nights and homely comfort.',
+    name: 'Elegant Living Space',
+    description: 'A cozy and stylish living room featuring a soft wooden sofa set, modern decor, and warm lighting that creates a welcoming home atmosphere.',
     image: '/Image1.jpeg'
   },
   {
     id: 2,
-    name: 'Comfortable Stay',
-    description: 'Bright and airy setup for a peaceful, private experience.',
+    name: 'Comfortable Bedroom',
+    description: 'A neatly arranged bedroom with a double bed, premium bedding, and calm tones designed for peaceful relaxation.',
     image: '/Image2.jpeg'
   },
   {
     id: 3,
-    name: 'Neat Wardrobe Space',
-    description: 'Organized interiors that make your family stay effortless.',
+    name: 'Modern Hall Design',
+    description: 'A bright and open hall with simple furniture, clean walls, and perfect lighting for family gatherings or leisure time.',
     image: '/Image3.jpeg'
   },
   {
     id: 4,
-    name: 'Well-Equipped Dining Area',
-    description: 'Enjoy family meals together in a clean and welcoming space.',
+    name: 'House Front Entrance',
+    description: 'A secure and well-maintained house entrance with tiled flooring and a grill gate that offers safety and style.',
     image: '/Image4.jpeg'
   },
   {
     id: 5,
-    name: 'Secure Entrance',
-    description: 'Safe, gated entry providing complete peace of mind.',
+    name: 'Air-Conditioned Bedroom',
+    description: 'A cozy, cool bedroom with an air conditioner, wooden wardrobe, and minimalist design for a refreshing stay.',
     image: '/Image5.jpeg'
   },
   {
     id: 6,
-    name: 'A.M. Comfort Inn — Front View',
-    description: 'A modern, family-friendly inn built for relaxation.',
+    name: 'Minimalist Lounge Area',
+    description: 'A small yet elegant lounge space designed for comfort and simplicity, suitable for both guests and family moments.',
     image: '/Image6.jpeg'
   },
   {
     id: 7,
-    name: 'Family Living Space',
-    description: 'Relax and connect with loved ones in our cozy, well-furnished living area.',
+    name: 'Neat Living Area',
+    description: 'A simple and functional living space with a comfortable sofa set and decorative curtains that enhance the room’s elegance.',
     image: '/Image7.jpeg'
   },
   {
     id: 8,
-    name: 'Neatly Arranged Bedroom',
-    description: 'A clean and spacious bedroom designed for ultimate relaxation and rest.',
+    name: 'Elegant Bedroom Interior',
+    description: 'A well-decorated bedroom that combines comfort and simplicity with neatly arranged furniture and soothing colors.',
     image: '/Image8.jpeg'
   },
   {
     id: 9,
-    name: 'Simple, Elegant Interiors',
-    description: 'Thoughtfully arranged furniture and decor to make you feel right at home.',
+    name: 'Elegant & Simple Interiors',
+    description: 'Our rooms feature thoughtfully arranged furniture and decor. We strive to make you feel right at home from the moment you arrive.',
     image: '/Image9.jpeg'
   },
   {
     id: 10,
-    name: 'Safe & Welcoming Entrance',
-    description: 'Secure entryway ensuring safety and privacy for every guest.',
+    name: 'Family Dining Space',
+    description: 'A well-organized dining corner featuring wooden furniture and a peaceful setting for everyday meals.',
     image: '/Image10.jpeg'
   },
   {
     id: 11,
-    name: 'Bright Bedroom Ambience',
-    description: 'Experience restful nights in our clean, air-conditioned room with natural lighting.',
+    name: 'Secure Front Gate Area',
+    description: 'A neat and tiled front space featuring a strong metal gate and a clean pink wall finish, providing both safety and elegance for the entrance.',
     image: '/Image11.jpeg'
   },
   {
     id: 12,
-    name: 'Cozy Living Area',
-    description: 'Perfect for family chats, evening tea, or simply unwinding after a busy day.',
+    name: 'Modern Two-Storey House Front',
+    description: 'A beautifully maintained two-floor residence painted in soft pink and white tones, featuring a gated parking area and balcony with decorative railings — perfect for family living.',
     image: '/Image12.jpeg'
   }
 ];
@@ -85,16 +85,6 @@ const Gallery = () => {
   return (
     // .gallery: pt-20 (to offset 80px navbar)
     <div className="gallery pt-20 bg-white">
-      
-      {/* Light & Clean Hero Section */}
-      <div className="bg-white pt-24 pb-16 text-center">
-        <h1 className="text-5xl font-bold text-primary-blue mb-4 animate-fade-in-up font-playfair">
-          Our Rooms Gallery
-        </h1>
-        <p className="text-xl text-text-dark/90 animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-          Explore our comfortable and stylish accommodations
-        </p>
-      </div>
 
       {/* .gallery-content */}
       <div className="py-16">
@@ -103,7 +93,7 @@ const Gallery = () => {
           
           {/* .gallery-intro */}
           <div className="text-center max-w-3xl mx-auto mb-16 animate-fade-in-up">
-            <h2 className="text-4xl font-bold text-primary-blue mb-6 pb-4 relative inline-block after:content-[''] after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-24 after:h-1 after:bg-orange-500 font-playfair">
+            <h2 className="text-6xl font-bold text-primary-blue mb-6 pb-4 relative inline-block after:content-[''] after:absolute after:bottom-0 after:left-1/2 after:-translate-x-1/2 after:w-24 after:h-1 after:bg-orange-500 font-playfair">
               Discover Your Perfect Stay
             </h2>
             <p className="text-lg text-text-dark/90 leading-relaxed">

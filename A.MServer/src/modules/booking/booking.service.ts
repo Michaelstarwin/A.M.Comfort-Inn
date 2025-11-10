@@ -29,12 +29,24 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
         return { isAvailable: false, totalAmount: 0, ratePerNight: 0, message: 'This room type is currently not available.' };
     }
 
+    const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000); // 15 minutes ago
+
     const overlappingBookings = await db.booking.findMany({
         where: {
             roomType: request.roomType,
-            paymentStatus: { in: ['Success', 'Pending'] },
             checkInDate: { lt: checkOutDateTime },
             checkOutDate: { gt: checkInDateTime },
+            OR: [
+                {
+                    paymentStatus: 'Success',
+                },
+                {
+                    paymentStatus: 'Pending',
+                    createdAt: {
+                        gt: pendingBookingExpiryTime,
+                    },
+                },
+            ],
         },
     });
 
