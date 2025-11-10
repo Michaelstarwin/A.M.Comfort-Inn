@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form';
 import { toast } from 'react-hot-toast';
 import { Mail, Phone, MapPin, Clock } from 'lucide-react';
 
+/* eslint-disable no-unused-vars */
 const useSubmit = () => {
   const [state, setState] = React.useState({
     submitting: false,
@@ -34,6 +35,7 @@ const useSubmit = () => {
 
   return [state, handleSubmit];
 };
+/* eslint-enable no-unused-vars */
 
 const Contact = () => {
   const { register, handleSubmit: handleFormSubmit, reset } = useForm();

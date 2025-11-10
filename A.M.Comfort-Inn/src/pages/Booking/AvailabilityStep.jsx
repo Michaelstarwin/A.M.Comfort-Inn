@@ -56,7 +56,7 @@ export const AvailabilityStep = ({ onSuccess }) => {
 
       <div className="mb-6 p-4 bg-gray-50 rounded-lg">
         <h3 className="text-lg font-medium text-gray-800 mb-2">Standard Check-in/Check-out Times</h3>
-        <p className="text-sm text-gray-600">Check-in: 12:00 PM | Check-out: 11:00 PM</p>
+        <p className="text-sm text-gray-600">Check-in: 12:00 PM | Check-out: 11:00 AM</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

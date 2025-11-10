@@ -8,6 +8,7 @@ const Navbar = () => {
 
   useEffect(() => {
     setMobileMenuOpen(false);
+    window.scrollTo(0, 0); // Scroll to the top of the page on route change
   }, [location]);
 
   const isLinkActive = (path) => location.pathname + location.hash === path;
