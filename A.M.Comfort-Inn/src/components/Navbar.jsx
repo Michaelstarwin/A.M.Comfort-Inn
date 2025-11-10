@@ -8,7 +8,10 @@ const Navbar = () => {
 
   useEffect(() => {
     setMobileMenuOpen(false);
-    window.scrollTo(0, 0); // Scroll to the top of the page on route change
+    // Only scroll to top if there's no hash in the URL
+    if (!location.hash) {
+      window.scrollTo(0, 0);
+    }
   }, [location]);
 
   const isLinkActive = (path) => location.pathname + location.hash === path;
