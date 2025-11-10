@@ -22,6 +22,11 @@ export const AvailabilityStep = ({ onSuccess }) => {
     }
   });
 
+  const rooms = [
+    { name: 'Standard Room', description: 'Comfortable and affordable room perfect for couples or small families.' },
+    { name: 'Deluxe Room', description: 'Spacious and luxurious room with premium amenities for a memorable stay.' }
+  ];
+
   const roomType = watch('roomType');
 
   useEffect(() => {
@@ -72,11 +77,19 @@ export const AvailabilityStep = ({ onSuccess }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <FormSelect label="Room Type" name="roomType" register={register} error={errors.roomType}>
-          <option value="">Select Room Type</option>
-          <option value="Standard Room" title="Comfortable and affordable room perfect for couples or small families.">Standard Room</option>
-          <option value="Deluxe Room" title="Spacious and luxurious room with premium amenities for a memorable stay.">Deluxe Room</option>
-        </FormSelect>
+        <div>
+          <FormSelect label="Room Type" name="roomType" register={register} error={errors.roomType}>
+            <option value="">Select Room Type</option>
+            {rooms.map(room => (
+              <option key={room.name} value={room.name}>{room.name}</option>
+            ))}
+          </FormSelect>
+          {roomType && (
+            <div className="mt-2 p-3 bg-gray-100 rounded-md">
+              <p className="text-sm text-gray-700">{rooms.find(r => r.name === roomType)?.description}</p>
+            </div>
+          )}
+        </div>
         <FormInput label="Number of Rooms" name="roomCount" type="number" register={register} error={errors.roomCount} parseAs="number" readOnly />
       </div>
 
