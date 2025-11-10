@@ -74,8 +74,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <FormSelect label="Room Type" name="roomType" register={register} error={errors.roomType}>
           <option value="">Select Room Type</option>
-          <option value="Standard Room">Standard Room - Comfortable and affordable room perfect for couples or small families.</option>
-          <option value="Deluxe Room">Deluxe Room - Spacious and luxurious room with premium amenities for a memorable stay.</option>
+          <option value="Standard Room" title="Comfortable and affordable room perfect for couples or small families.">Standard Room</option>
+          <option value="Deluxe Room" title="Spacious and luxurious room with premium amenities for a memorable stay.">Deluxe Room</option>
         </FormSelect>
         <FormInput label="Number of Rooms" name="roomCount" type="number" register={register} error={errors.roomCount} parseAs="number" readOnly />
       </div>
