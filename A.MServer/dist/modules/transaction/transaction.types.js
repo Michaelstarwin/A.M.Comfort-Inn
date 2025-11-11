@@ -13,3 +13,4 @@ exports.createTransactionSchema = zod_1.z.object({
         totalAmount: zod_1.z.number().positive("Total amount must be a positive number."),
     }),
 });
+//# sourceMappingURL=transaction.types.js.map

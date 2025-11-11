@@ -64,3 +64,4 @@ router.post('/webhook', express_1.default.raw({ type: 'application/json' }), (re
     }
 }));
 exports.default = router;
+//# sourceMappingURL=payment.route.js.map

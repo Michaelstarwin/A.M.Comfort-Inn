@@ -60,3 +60,4 @@ router.post('/users', (req, res) => __awaiter(void 0, void 0, void 0, function* 
     }
 }));
 exports.default = router;
+//# sourceMappingURL=admin.route.js.map

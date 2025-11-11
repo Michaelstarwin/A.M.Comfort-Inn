@@ -54,3 +54,4 @@ const isAdmin = (req, res, next) => __awaiter(void 0, void 0, void 0, function* 
     }
 });
 exports.isAdmin = isAdmin;
+//# sourceMappingURL=auth.middleware.js.map
