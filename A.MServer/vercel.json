@@ -1,14 +1,16 @@
 {
   "version": 2,
-  "buildCommand": "npm --prefix A.MServer ci && npm --prefix A.MServer run build && npm --prefix A.M.Comfort-Inn ci && npm --prefix A.M.Comfort-Inn run build",
+  "buildCommand": "npm install && npm run build",
   "builds": [
-    { "src": "A.MServer/api/server.js", "use": "@vercel/node" },
-    { "src": "A.M.Comfort-Inn/package.json", "use": "@vercel/static-build" }
+    {
+      "src": "server.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "^/api/(.*)$", "dest": "A.MServer/api/server.js" },
-    { "handle": "filesystem" },
-    { "src": ".*", "dest": "/" }
-  ],
-  "outputDirectory": "A.M.Comfort-Inn/dist"
+    {
+      "src": "/(.*)",
+      "dest": "server.js"
+    }
+  ]
 }
