@@ -7,7 +7,8 @@
     "build": "npx tsc",
     "start": "node dist/app.js",
     "dev": "nodemon src/app.ts",
-    "postinstall": "npx prisma generate"
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma generate && npm run build && npx prisma migrate deploy"
   },
   "author": "AMcinn",
   "license": "ISC",
