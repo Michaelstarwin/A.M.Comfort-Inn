@@ -6,7 +6,7 @@
  "scripts": {
   "build": "tsc",
   "vercel-build": "npm run build",
-  "start": "node dist/app.js",
+  "start": "node dist/app.ts",
   "dev": "ts-node-dev --respawn --transpile-only src/app.ts"
 },
   "author": "Rexcoders",
