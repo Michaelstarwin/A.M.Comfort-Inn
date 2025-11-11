@@ -5,3 +5,4 @@ const sendErrorObj = (res, code, message) => {
     res.status(500).json({ errorCode: code, errorMessage: message });
 };
 exports.sendErrorObj = sendErrorObj;
+//# sourceMappingURL=errorObject.js.map

@@ -51,3 +51,4 @@ router.post('/users', async (req, res) => {
     }
 });
 exports.default = router;
+//# sourceMappingURL=admin.route.js.map

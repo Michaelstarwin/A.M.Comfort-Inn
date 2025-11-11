@@ -257,3 +257,4 @@ router.get('/admin/analytics/top-rooms', auth_middleware_1.isAdmin, async (req, 
     }
 });
 exports.default = router;
+//# sourceMappingURL=booking.route.js.map

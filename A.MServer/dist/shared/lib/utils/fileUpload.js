@@ -34,3 +34,4 @@ const uploadFileMiddleware = (req, res, fieldName) => {
     });
 };
 exports.uploadFileMiddleware = uploadFileMiddleware;
+//# sourceMappingURL=fileUpload.js.map

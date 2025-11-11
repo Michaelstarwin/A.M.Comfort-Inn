@@ -38,3 +38,4 @@ const getRoomImageUrl = (filename) => {
     return `/uploads/rooms/${filename}`;
 };
 exports.getRoomImageUrl = getRoomImageUrl;
+//# sourceMappingURL=roomImageUpload.js.map

@@ -14,8 +14,8 @@ import "express-async-errors";
 dotenv.config();
 
 const app: Express = express();
-const host = process.env.APP_HOST || 'localhost';
-const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
+const host = "0.0.0.0";
+const port = Number(process.env.PORT) || 7700;
 
 // --- Core Middleware ---
 // Enable CORS with default options
@@ -32,8 +32,8 @@ app.set("port", port);
 
 // --- API Routes ---
 app.use('/api/bookings', bookingRoutes);
-app.use('/api/transactions', express.json(), transactionRoutes);
-app.use('/api/admin', express.json(), adminRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/admin', adminRoutes);
 
 
 // --- Static Assets ---
@@ -75,10 +75,8 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 
 // --- Server Activation (only when run locally) ---
 if (require.main === module) {
-  const host = process.env.APP_HOST || 'localhost';
-  const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
   app.listen(port, host, () => {
-    console.log(`✅ Server is running at http://${host}:${port}`);
+    console.log(`Server running on http://${host}:${port}`);
   });
 }
 

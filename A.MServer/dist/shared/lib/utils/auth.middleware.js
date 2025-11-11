@@ -45,3 +45,4 @@ const isAdmin = async (req, res, next) => {
     }
 };
 exports.isAdmin = isAdmin;
+//# sourceMappingURL=auth.middleware.js.map

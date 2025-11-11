@@ -50,3 +50,4 @@ router.post('/', (0, validate_middleware_1.validate)(transaction_types_1.createT
     });
 });
 exports.default = router;
+//# sourceMappingURL=transaction.route.js.map

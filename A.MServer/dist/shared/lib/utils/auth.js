@@ -18,3 +18,4 @@ async function comparePassword(password, hash) {
 function generateToken(payload) {
     return jsonwebtoken_1.default.sign(payload, JWT_SECRET, { expiresIn: "7d" });
 }
+//# sourceMappingURL=auth.js.map

@@ -55,3 +55,4 @@ exports.updateRoomSchema = zod_1.z.object({
         status: zod_1.z.enum(['Active', 'Inactive']).optional(),
     }),
 });
+//# sourceMappingURL=booking.validation.js.map

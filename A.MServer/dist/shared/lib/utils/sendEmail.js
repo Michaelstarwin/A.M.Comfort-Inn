@@ -35,3 +35,4 @@ async function sendBookingConfirmationEmail(to, bookingDetails) {
     `,
     });
 }
+//# sourceMappingURL=sendEmail.js.map

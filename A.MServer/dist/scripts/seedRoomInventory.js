@@ -45,3 +45,4 @@ async function seedRoomInventory() {
 }
 // Run the seed function
 seedRoomInventory();
+//# sourceMappingURL=seedRoomInventory.js.map

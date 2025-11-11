@@ -59,3 +59,4 @@ const authenticateToken = (req, res, next) => {
     });
 };
 exports.authenticateToken = authenticateToken;
+//# sourceMappingURL=jwt.js.map

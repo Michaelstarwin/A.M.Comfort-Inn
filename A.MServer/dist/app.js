@@ -15,8 +15,8 @@ const admin_route_1 = __importDefault(require("./modules/admin/admin.route"));
 require("express-async-errors");
 dotenv_1.default.config();
 const app = (0, express_1.default)();
-const host = process.env.APP_HOST || 'localhost';
-const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
+const host = "0.0.0.0";
+const port = Number(process.env.PORT) || 7700;
 // --- Core Middleware ---
 // Enable CORS with default options
 app.use((0, cors_1.default)());
@@ -29,8 +29,8 @@ app.set("host", host);
 app.set("port", port);
 // --- API Routes ---
 app.use('/api/bookings', booking_route_1.default);
-app.use('/api/transactions', express_1.default.json(), transaction_route_1.default);
-app.use('/api/admin', express_1.default.json(), admin_route_1.default);
+app.use('/api/transactions', transaction_route_1.default);
+app.use('/api/admin', admin_route_1.default);
 // --- Static Assets ---
 // Serve uploaded files
 if (process.env.NODE_ENV !== 'production') {
@@ -63,10 +63,9 @@ app.use((err, req, res, next) => {
 });
 // --- Server Activation (only when run locally) ---
 if (require.main === module) {
-    const host = process.env.APP_HOST || 'localhost';
-    const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
     app.listen(port, host, () => {
-        console.log(`✅ Server is running at http://${host}:${port}`);
+        console.log(`Server running on http://${host}:${port}`);
     });
 }
 exports.default = app;
+//# sourceMappingURL=app.js.map

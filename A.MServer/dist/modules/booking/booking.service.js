@@ -381,3 +381,4 @@ function getDateRangeForPeriod(period) {
     }
     return { startDate, endDate };
 }
+//# sourceMappingURL=booking.service.js.map
