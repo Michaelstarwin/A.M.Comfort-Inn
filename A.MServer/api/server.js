@@ -1,4 +1,7 @@
 const serverless = require("serverless-http");
-// require compiled app from dist (make sure dist/app.js exists after tsc)
-const app = require("../dist/app").default;
+
+// safe import (works whether app exports default or not)
+const mod = require("../dist/app");
+const app = mod.default || mod;
+
 module.exports = serverless(app);
