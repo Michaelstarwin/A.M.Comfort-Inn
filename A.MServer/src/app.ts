@@ -71,11 +71,13 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 
-// --- Server Activation ---
-app.listen(port, host, () => {
-  console.log(
-    `✅ Server is running at http://${host}:${port}`
-  );
-});
+// --- Server Activation (only when run locally) ---
+if (require.main === module) {
+  const host = process.env.APP_HOST || 'localhost';
+  const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
+  app.listen(port, host, () => {
+    console.log(`✅ Server is running at http://${host}:${port}`);
+  });
+}
 
 export default app;

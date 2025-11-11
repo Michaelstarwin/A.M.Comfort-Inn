@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "description": "",
   "main": "src/app.ts",
-  "scripts": {
-    "build": "npx tsc",
-    "start": "node dist/app.js",
-    "dev": "nodemon src/app.ts"
-  },
+ "scripts": {
+  "build": "tsc",
+  "vercel-build": "npm run build",
+  "start": "node dist/app.js",
+  "dev": "ts-node-dev --respawn --transpile-only src/app.ts"
+},
   "author": "Rexcoders",
   "license": "ISC",
   "devDependencies": {
@@ -37,6 +38,7 @@
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^7.0.5",
     "razorpay": "^2.9.6",
+    "serverless-http": "^4.0.0",
     "uuid": "^11.1.0",
     "zod": "^4.1.12"
   }
