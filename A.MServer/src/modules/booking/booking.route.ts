@@ -87,17 +87,35 @@ router.get('/admin/inventory/room-types', isAdmin, async (req, res) => {
 });
 
 // FR 3.6: Create a new room type (with image upload)
+// Note: multer `uploadRoomImage` populates req.body with strings (multipart/form-data).
+// We must validate and coerce values before sending them to Prisma to avoid NaN/undefined errors.
 router.post('/admin/inventory/room-types', isAdmin, uploadRoomImage, async (req, res) => {
     try {
+        const roomType = typeof req.body.roomType === 'string' ? req.body.roomType.trim() : '';
+        // if (!roomType) {
+        //     return res.status(400).json({ success: false, message: 'roomType is required.' });
+        // }
+
+        const totalRoomsRaw = req.body.totalRooms;
+        const currentRateRaw = req.body.currentRate;
+
+        const totalRooms = totalRoomsRaw !== undefined && totalRoomsRaw !== '' ? parseInt(totalRoomsRaw as string) : NaN;
+        const currentRate = currentRateRaw !== undefined && currentRateRaw !== '' ? parseFloat(currentRateRaw as string) : NaN;
+
+        if (Number.isNaN(totalRooms) || Number.isNaN(currentRate)) {
+            return res.status(400).json({ success: false, message: 'totalRooms and currentRate are required and must be valid numbers.' });
+        }
+
         const data = {
-            roomType: req.body.roomType,
-            totalRooms: parseInt(req.body.totalRooms),
-            currentRate: parseFloat(req.body.currentRate),
+            roomType,
+            totalRooms,
+            currentRate,
             status: req.body.status || 'Active',
-            description: req.body.description,
-            imageUrl: req.file ? `/uploads/rooms/${req.file.filename}` : null
+            description: req.body.description || undefined,
+            imageUrl: req.file ? `/uploads/rooms/${req.file.filename}` : null,
         };
-        const newRoom = await BookingService.createRoomType(data);
+
+        const newRoom = await BookingService.createRoomType(data as any);
         res.status(201).json({ success: true, message: 'Room type created successfully.', data: newRoom });
     } catch (error: any) {
         res.status(400).json({ success: false, message: error.message });
@@ -107,14 +125,35 @@ router.post('/admin/inventory/room-types', isAdmin, uploadRoomImage, async (req,
 // FR 3.6: Update an existing room type (with image upload)
 router.put('/admin/inventory/room-types/:roomId', isAdmin, uploadRoomImage, async (req, res) => {
     try {
-        const data = {
-            roomType: req.body.roomType,
-            totalRooms: parseInt(req.body.totalRooms),
-            currentRate: parseFloat(req.body.currentRate),
-            status: req.body.status || 'Active',
-            description: req.body.description,
-            imageUrl: req.file ? `/uploads/rooms/${req.file.filename}` : undefined
-        };
+        // Build update payload safely: only include fields that are present and valid
+        const data: any = {};
+
+        if (typeof req.body.roomType === 'string' && req.body.roomType.trim() !== '') {
+            data.roomType = req.body.roomType.trim();
+        }
+
+        if (req.body.totalRooms !== undefined && req.body.totalRooms !== '') {
+            const totalRooms = parseInt(req.body.totalRooms as string);
+            if (!Number.isNaN(totalRooms)) data.totalRooms = totalRooms;
+        }
+
+        if (req.body.currentRate !== undefined && req.body.currentRate !== '') {
+            const currentRate = parseFloat(req.body.currentRate as string);
+            if (!Number.isNaN(currentRate)) data.currentRate = currentRate;
+        }
+
+        if (typeof req.body.status === 'string' && req.body.status.trim() !== '') {
+            data.status = req.body.status as 'Active' | 'Inactive';
+        }
+
+        if (typeof req.body.description === 'string') {
+            data.description = req.body.description;
+        }
+
+        if (req.file) {
+            data.imageUrl = `/uploads/rooms/${req.file.filename}`;
+        }
+
         const updatedRoom = await BookingService.updateRoomType(req.params.roomId, data);
         res.status(200).json({ success: true, message: 'Room type updated successfully.', data: updatedRoom });
     } catch (error: any) {

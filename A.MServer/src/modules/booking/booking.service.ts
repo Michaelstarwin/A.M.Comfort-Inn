@@ -140,18 +140,67 @@ export async function getBookingByReference(referenceNumber: string) {
 
 // --- Admin Services (Looks OK, uses 'db') ---
 export async function getRoomInventory() {
-    return db.roomInventory.findMany({ orderBy: { roomType: 'asc' } });
+  try {
+    return await db.roomInventory.findMany({ orderBy: { roomType: 'asc' } });
+  } catch (err: any) {
+    // If DB doesn't have description column (P2022), fallback to selecting known columns only
+    if (err?.code === 'P2022') {
+      return db.roomInventory.findMany({
+                // Select only columns that are guaranteed to exist on older schemas
+                select: { roomId: true, roomType: true, totalRooms: true, currentRate: true, status: true, createdAt: true, updatedAt: true },
+        orderBy: { roomType: 'asc' },
+      });
+    }
+    throw err;
+  }
 }
 
 export async function createRoomType(data: CreateRoomRequest) {
+    // Validate required fields server-side to provide clearer errors when client submits malformed data
+    if (!data || typeof (data as any).roomType !== 'string' || (data as any).roomType.trim() === '') {
+        throw new Error('roomType is required and must be a non-empty string.');
+    }
+
+    if (typeof (data as any).totalRooms !== 'number' || Number.isNaN((data as any).totalRooms)) {
+        throw new Error('totalRooms is required and must be a valid integer.');
+    }
+
+    if (typeof (data as any).currentRate !== 'number' || Number.isNaN((data as any).currentRate)) {
+        throw new Error('currentRate is required and must be a valid number.');
+    }
+
+    const payload: any = {
+        roomType: (data as any).roomType.trim(),
+        totalRooms: (data as any).totalRooms,
+        currentRate: (data as any).currentRate,
+        status: (data as any).status || 'Active',
+    };
+
+    if ((data as any).description !== undefined) payload.description = (data as any).description;
+    if ((data as any).imageUrl !== undefined) payload.imageUrl = (data as any).imageUrl;
+
     // Add check to ensure roomType doesn't already exist?
-    return db.roomInventory.create({ data });
+    return db.roomInventory.create({ data: payload });
 }
 
 export async function updateRoomType(roomId: string, data: UpdateRoomRequest) {
+    // Prevent accidental updates with empty payloads or invalid values
+    const updatePayload: any = {};
+
+    if (data.roomType !== undefined) updatePayload.roomType = data.roomType;
+    if (data.totalRooms !== undefined) updatePayload.totalRooms = data.totalRooms as any;
+    if (data.currentRate !== undefined) updatePayload.currentRate = data.currentRate as any;
+    if (data.status !== undefined) updatePayload.status = data.status as any;
+    if ((data as any).description !== undefined) updatePayload.description = (data as any).description;
+    if ((data as any).imageUrl !== undefined) updatePayload.imageUrl = (data as any).imageUrl;
+
+    if (Object.keys(updatePayload).length === 0) {
+        throw new Error('No valid fields provided to update.');
+    }
+
     return db.roomInventory.update({
         where: { roomId },
-        data,
+        data: updatePayload,
     });
 }
 
