@@ -62,10 +62,10 @@ function checkAvailability(request) {
                 checkOutDate: { gt: checkInDateTime },
                 OR: [
                     {
-                        paymentStatus: client_1.BookingPaymentStatus.Success,
+                        paymentStatus: client_1.$Enums.BookingPaymentStatus.Success,
                     },
                     {
-                        paymentStatus: client_1.BookingPaymentStatus.Pending,
+                        paymentStatus: client_1.$Enums.BookingPaymentStatus.Pending,
                         createdAt: {
                             gt: pendingBookingExpiryTime,
                         },
@@ -99,7 +99,7 @@ function preBook(request) {
         // Extract guestInfo separately to avoid spreading potentially undefined userId
         const { guestInfo, userId } = request, restOfRequest = __rest(request, ["guestInfo", "userId"]);
         const booking = yield db_1.db.booking.create({
-            data: Object.assign(Object.assign({}, restOfRequest), { guestInfo: guestInfo, userId: userId, checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`), checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`), totalAmount: availability.totalAmount, roomInventoryId: roomInventory.roomId, paymentStatus: client_1.BookingPaymentStatus.Pending }),
+            data: Object.assign(Object.assign({}, restOfRequest), { guestInfo: guestInfo, userId: userId, checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`), checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`), totalAmount: availability.totalAmount, roomInventoryId: roomInventory.roomId, paymentStatus: client_1.$Enums.BookingPaymentStatus.Pending }),
         });
         return {
             bookingId: booking.bookingId,
@@ -113,7 +113,7 @@ function createOrder(request) {
         const booking = yield db_1.db.booking.findUniqueOrThrow({
             where: { bookingId: request.bookingId },
         });
-        if (booking.paymentStatus !== client_1.BookingPaymentStatus.Pending) {
+        if (booking.paymentStatus !== client_1.$Enums.BookingPaymentStatus.Pending) {
             throw new Error('This booking is not pending and cannot create a payment order.');
         }
         // Type assertion for guestInfo
@@ -301,12 +301,12 @@ function getAnalytics() {
                 },
             },
         });
-        const successfulBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Success).length;
-        const failedBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Failed).length;
-        const pendingBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Pending).length;
-        const refundedBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Refunded).length;
+        const successfulBookings = bookings.filter((b) => b.paymentStatus === client_1.$Enums.BookingPaymentStatus.Success).length;
+        const failedBookings = bookings.filter((b) => b.paymentStatus === client_1.$Enums.BookingPaymentStatus.Failed).length;
+        const pendingBookings = bookings.filter((b) => b.paymentStatus === client_1.$Enums.BookingPaymentStatus.Pending).length;
+        const refundedBookings = bookings.filter((b) => b.paymentStatus === client_1.$Enums.BookingPaymentStatus.Refunded).length;
         const totalRevenue = bookings
-            .filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Success)
+            .filter((b) => b.paymentStatus === client_1.$Enums.BookingPaymentStatus.Success)
             .reduce((sum, b) => sum + b.totalAmount, 0);
         return {
             totalBookings: bookings.length,
@@ -330,7 +330,7 @@ function getRevenueAnalytics() {
         const dateRange = getDateRangeForPeriod(period);
         const bookings = yield db_1.db.booking.findMany({
             where: {
-                paymentStatus: client_1.BookingPaymentStatus.Success,
+                paymentStatus: client_1.$Enums.BookingPaymentStatus.Success,
                 createdAt: {
                     gte: dateRange.startDate,
                     lte: dateRange.endDate,
@@ -340,7 +340,7 @@ function getRevenueAnalytics() {
         });
         // Create daily revenue chart data
         const revenueByDate = {};
-        bookings.forEach(booking => {
+        bookings.forEach((booking) => {
             const date = booking.createdAt.toISOString().split('T')[0];
             revenueByDate[date] = (revenueByDate[date] || 0) + booking.totalAmount;
         });
@@ -361,7 +361,7 @@ function getOccupancyStats() {
         const rooms = yield db_1.db.roomInventory.findMany();
         const bookings = yield db_1.db.booking.findMany({
             where: {
-                paymentStatus: client_1.BookingPaymentStatus.Success,
+                paymentStatus: client_1.$Enums.BookingPaymentStatus.Success,
             },
         });
         const totalRoomCapacity = rooms.reduce((sum, r) => sum + r.totalRooms, 0);
@@ -382,10 +382,10 @@ function getOccupancyStats() {
 function getTopRoomTypes() {
     return __awaiter(this, void 0, void 0, function* () {
         const bookings = yield db_1.db.booking.findMany({
-            where: { paymentStatus: client_1.BookingPaymentStatus.Success },
+            where: { paymentStatus: client_1.$Enums.BookingPaymentStatus.Success },
         });
         const roomStats = {};
-        bookings.forEach(booking => {
+        bookings.forEach((booking) => {
             if (!roomStats[booking.roomType]) {
                 roomStats[booking.roomType] = { bookings: 0, revenue: 0 };
             }
