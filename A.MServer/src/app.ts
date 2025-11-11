@@ -38,7 +38,9 @@ app.use('/api/admin', express.json(), adminRoutes);
 
 // --- Static Assets ---
 // Serve uploaded files
-app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+if (process.env.NODE_ENV !== 'production') {
+  app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
+}
 
 
 // --- Health Check Endpoint ---
