@@ -1,4 +1,4 @@
-import { PrismaClient, BookingPaymentStatus } from '@prisma/client'; // Keep this if db isn't globally available, otherwise remove
+import { $Enums } from '@prisma/client'; // Keep this if db isn't globally available, otherwise remove
 import crypto from 'crypto';
 import { CheckAvailabilityRequest, PreBookRequest, CreateOrderRequest, CreateRoomRequest, UpdateRoomRequest } from './booking.validation';
 import { db } from '../../shared/lib/db'; // Use the shared instance
@@ -32,10 +32,10 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
             checkOutDate: { gt: checkInDateTime },
             OR: [
                 {
-                    paymentStatus: BookingPaymentStatus.Success,
+                    paymentStatus: $Enums.BookingPaymentStatus.Success,
                 },
                 {
-                    paymentStatus: BookingPaymentStatus.Pending,
+                    paymentStatus: $Enums.BookingPaymentStatus.Pending,
                     createdAt: {
                         gt: pendingBookingExpiryTime,
                     },
@@ -44,7 +44,7 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
         },
     });
 
-    const bookedRoomsCount = overlappingBookings.reduce((sum, booking) => sum + booking.roomCount, 0);
+    const bookedRoomsCount = overlappingBookings.reduce((sum: number, booking: { roomCount: number }) => sum + booking.roomCount, 0);
     const availableRooms = roomInventory.totalRooms - bookedRoomsCount;
     
     const isAvailable = availableRooms >= request.roomCount;
@@ -82,7 +82,7 @@ export async function preBook(request: PreBookRequest) {
             checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
             totalAmount: availability.totalAmount, // Already checked for > 0 in availability
             roomInventoryId: roomInventory.roomId,
-            paymentStatus: BookingPaymentStatus.Pending,
+            paymentStatus: $Enums.BookingPaymentStatus.Pending,
         },
     });
 
@@ -98,7 +98,7 @@ export async function createOrder(request: CreateOrderRequest) {
         where: { bookingId: request.bookingId },
     });
 
-    if (booking.paymentStatus !== BookingPaymentStatus.Pending) {
+    if (booking.paymentStatus !== $Enums.BookingPaymentStatus.Pending) {
         throw new Error('This booking is not pending and cannot create a payment order.');
     }
     
@@ -271,7 +271,7 @@ export async function updateBookingStatus(bookingId: string, status: string) {
 
     const booking = await db.booking.update({
         where: { bookingId },
-        data: { paymentStatus: status as BookingPaymentStatus, updatedAt: new Date() },
+        data: { paymentStatus: status as $Enums.BookingPaymentStatus, updatedAt: new Date() },
     });
 
     return booking;
@@ -290,13 +290,13 @@ export async function getAnalytics(period: string = 'month') {
         },
     });
 
-    const successfulBookings = bookings.filter(b => b.paymentStatus === BookingPaymentStatus.Success).length;
-    const failedBookings = bookings.filter(b => b.paymentStatus === BookingPaymentStatus.Failed).length;
-    const pendingBookings = bookings.filter(b => b.paymentStatus === BookingPaymentStatus.Pending).length;
-    const refundedBookings = bookings.filter(b => b.paymentStatus === BookingPaymentStatus.Refunded).length;
+    const successfulBookings = bookings.filter((b: { paymentStatus: $Enums.BookingPaymentStatus }) => b.paymentStatus === $Enums.BookingPaymentStatus.Success).length;
+    const failedBookings = bookings.filter((b: { paymentStatus: $Enums.BookingPaymentStatus }) => b.paymentStatus === $Enums.BookingPaymentStatus.Failed).length;
+    const pendingBookings = bookings.filter((b: { paymentStatus: $Enums.BookingPaymentStatus }) => b.paymentStatus === $Enums.BookingPaymentStatus.Pending).length;
+    const refundedBookings = bookings.filter((b: { paymentStatus: $Enums.BookingPaymentStatus }) => b.paymentStatus === $Enums.BookingPaymentStatus.Refunded).length;
     const totalRevenue = bookings
-        .filter(b => b.paymentStatus === BookingPaymentStatus.Success)
-        .reduce((sum, b) => sum + b.totalAmount, 0);
+        .filter((b: { paymentStatus: $Enums.BookingPaymentStatus }) => b.paymentStatus === $Enums.BookingPaymentStatus.Success)
+        .reduce((sum: number, b: { totalAmount: number }) => sum + b.totalAmount, 0);
 
     return {
         totalBookings: bookings.length,
@@ -320,7 +320,7 @@ export async function getRevenueAnalytics(period: string = 'month') {
     
     const bookings = await db.booking.findMany({
         where: {
-            paymentStatus: BookingPaymentStatus.Success,
+            paymentStatus: $Enums.BookingPaymentStatus.Success,
             createdAt: {
                 gte: dateRange.startDate,
                 lte: dateRange.endDate,
@@ -331,7 +331,7 @@ export async function getRevenueAnalytics(period: string = 'month') {
 
     // Create daily revenue chart data
     const revenueByDate: Record<string, number> = {};
-    bookings.forEach(booking => {
+    bookings.forEach((booking: { createdAt: Date; totalAmount: number }) => {
         const date = booking.createdAt.toISOString().split('T')[0];
         revenueByDate[date] = (revenueByDate[date] || 0) + booking.totalAmount;
     });
@@ -341,7 +341,7 @@ export async function getRevenueAnalytics(period: string = 'month') {
         revenue: Math.round(revenue),
     }));
 
-    const totalRevenue = bookings.reduce((sum, b) => sum + b.totalAmount, 0);
+    const totalRevenue = bookings.reduce((sum: number, b: { totalAmount: number }) => sum + b.totalAmount, 0);
 
     return {
         totalRevenue,
@@ -354,12 +354,12 @@ export async function getOccupancyStats() {
     const rooms = await db.roomInventory.findMany();
     const bookings = await db.booking.findMany({
         where: {
-            paymentStatus: BookingPaymentStatus.Success,
+            paymentStatus: $Enums.BookingPaymentStatus.Success,
         },
     });
 
-    const totalRoomCapacity = rooms.reduce((sum, r) => sum + r.totalRooms, 0);
-    const bookedRooms = bookings.reduce((sum, b) => sum + b.roomCount, 0);
+    const totalRoomCapacity = rooms.reduce((sum: number, r: { totalRooms: number }) => sum + r.totalRooms, 0);
+    const bookedRooms = bookings.reduce((sum: number, b: { roomCount: number }) => sum + b.roomCount, 0);
     const occupancyRate = totalRoomCapacity > 0 ? (bookedRooms / totalRoomCapacity) * 100 : 0;
 
     return {
@@ -376,11 +376,11 @@ export async function getOccupancyStats() {
 
 export async function getTopRoomTypes() {
     const bookings = await db.booking.findMany({
-        where: { paymentStatus: BookingPaymentStatus.Success },
+        where: { paymentStatus: $Enums.BookingPaymentStatus.Success },
     });
 
     const roomStats: Record<string, { bookings: number; revenue: number }> = {};
-    bookings.forEach(booking => {
+    bookings.forEach((booking: { roomType: string; totalAmount: number }) => {
         if (!roomStats[booking.roomType]) {
             roomStats[booking.roomType] = { bookings: 0, revenue: 0 };
         }
@@ -393,7 +393,7 @@ export async function getTopRoomTypes() {
             roomType,
             ...stats,
         }))
-        .sort((a, b) => b.bookings - a.bookings)
+        .sort((a: { bookings: number }, b: { bookings: number }) => b.bookings - a.bookings)
         .slice(0, 5);
 
     return topRooms;
