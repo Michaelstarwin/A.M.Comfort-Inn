@@ -1,0 +1,70 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = __importDefault(require("express"));
+const dotenv_1 = __importDefault(require("dotenv"));
+const path_1 = __importDefault(require("path"));
+const cors_1 = __importDefault(require("cors"));
+// Import routes
+const booking_route_1 = __importDefault(require("./modules/booking/booking.route"));
+const transaction_route_1 = __importDefault(require("./modules/transaction/transaction.route"));
+const admin_route_1 = __importDefault(require("./modules/admin/admin.route"));
+// For async error handling
+require("express-async-errors");
+dotenv_1.default.config();
+const app = (0, express_1.default)();
+const host = process.env.APP_HOST || 'localhost';
+const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
+// --- Core Middleware ---
+// Enable CORS with default options
+app.use((0, cors_1.default)());
+// Parse JSON bodies
+app.use(express_1.default.json());
+// Parse URL-encoded bodies
+app.use(express_1.default.urlencoded({ extended: true }));
+// Express configuration
+app.set("host", host);
+app.set("port", port);
+// --- API Routes ---
+app.use('/api/bookings', booking_route_1.default);
+app.use('/api/transactions', express_1.default.json(), transaction_route_1.default);
+app.use('/api/admin', express_1.default.json(), admin_route_1.default);
+// --- Static Assets ---
+// Serve uploaded files
+app.use("/uploads", express_1.default.static(path_1.default.join(__dirname, "../uploads")));
+// --- Health Check Endpoint ---
+app.get("/", (req, res) => {
+    res.status(200).json({
+        status: "success",
+        message: "Welcome to A.M. Comfort Inn API"
+    });
+});
+// --- Global Error Handler ---
+// Must be the last middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack); // Log the error stack for debugging
+    // Handle known error types, e.g., validation errors
+    if (err.name === 'ZodError') {
+        return res.status(400).json({
+            status: 'error',
+            message: 'Invalid input data',
+            errors: JSON.parse(err.message)
+        });
+    }
+    // Generic fallback error
+    res.status(500).json({
+        status: 'error',
+        message: err.message || "An unexpected error occurred."
+    });
+});
+// --- Server Activation (only when run locally) ---
+if (require.main === module) {
+    const host = process.env.APP_HOST || 'localhost';
+    const port = process.env.APP_PORT ? parseInt(process.env.APP_PORT) : 7700;
+    app.listen(port, host, () => {
+        console.log(`✅ Server is running at http://${host}:${port}`);
+    });
+}
+exports.default = app;
