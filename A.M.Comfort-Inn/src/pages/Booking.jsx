@@ -1,48 +1,37 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { bookingApi } from "../utils/api";
 import { Toaster, toast } from "react-hot-toast";
+import { config } from "../config/api.config";
+import { loadScript } from "../utils/loadScript";
 
 import { AvailabilityStep } from "./Booking/AvailabilityStep";
 import { GuestDetailsStep } from "./Booking/GuestDetails";
 import { ReviewStep } from "./Booking/ReviewStep";
-
-// Function to initialize Cashfree payment
-// const initiateCashfreePayment = (orderData) => {
-//   if (window.Cashfree) {
-//     const cashfree = new window.Cashfree({
-//       mode: "sandbox", // Change to "production" for live
-//     });
-
-//     cashfree.checkout({
-//       paymentSessionId: orderData.payment_session_id, // Assuming backend provides this
-//       redirectTarget: "_self", // Redirect in same tab
-//     });
-//   } else {
-//     console.error("Cashfree SDK not loaded");
-//     toast.error("Payment gateway not available. Please try again.");
-//   }
-// };
-
-// Load Cashfree SDK
-// const loadCashfreeSDK = () => {
-//   if (!window.Cashfree) {
-//     const script = document.createElement('script');
-//     script.src = 'https://sdk.cashfree.com/js/v3/cashfree.js';
-//     script.async = true;
-//     document.head.appendChild(script);
-//   }
-// };
+import { useNavigate } from "react-router-dom";
 
 const Booking = () => {
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [availabilityData, setAvailabilityData] = useState(null);
   const [guestData, setGuestData] = useState(null);
 
-  // Load Cashfree SDK on component mount
-  // React.useEffect(() => {
-  //   loadCashfreeSDK();
-  // }, []); // 1. Called when AvailabilityStep is successful
+  // Load Razorpay SDK on component mount
+  useEffect(() => {
+    const loadRazorpaySDK = async () => {
+      try {
+        const res = await loadScript('https://checkout.razorpay.com/v1/checkout.js');
+        if (!res) {
+          toast.error('Razorpay SDK failed to load. Please check your internet connection.');
+        }
+      } catch (err) {
+        console.error('Failed to load Razorpay SDK:', err);
+        toast.error('Payment system initialization failed. Please try again later.');
+      }
+    };
+
+    loadRazorpaySDK();
+  }, []);
 
   const handleAvailabilitySuccess = (data) => {
     setAvailabilityData(data);
@@ -60,6 +49,10 @@ const Booking = () => {
     toast.loading("Creating your booking...");
 
     try {
+      if (!availabilityData || !guestData) {
+        throw new Error("Missing booking information. Please fill in all required details.");
+      }
+
       // Combine data from all steps for the preBook call
       const preBookRequest = {
         checkInDate: availabilityData.checkInDate,
@@ -74,8 +67,9 @@ const Booking = () => {
           phone: guestData.phone,
           country: guestData.country || "India",
         },
-      }; // FR 3.2: Create the 'Pending' booking
+      };
 
+      // Create the pending booking
       const preBookResponse = await bookingApi.preBook(preBookRequest);
       if (!preBookResponse.success) {
         throw new Error(
@@ -84,65 +78,83 @@ const Booking = () => {
       }
       const { bookingId } = preBookResponse.data;
       toast.success("Booking record created.");
-      toast.loading("Generating payment order..."); // FR 3.3: Create the Cashfree order
+      toast.loading("Generating Razorpay payment order...");
 
+      // Create Razorpay order
       const orderResponse = await bookingApi.createOrder({ bookingId });
       if (!orderResponse.success) {
         throw new Error(
           orderResponse.message || "Failed to create payment order."
         );
       }
-      toast.dismiss(); // Clear all loading toasts
-     // setIsLoading(false); // This is the data from your backend (orderId, signature, etc.)
+      toast.dismiss();
 
-      const { payment_session_id } = orderResponse.data;
-      if (!window.Cashfree) {
-          console.error("Cashfree SDK not loaded");
-          toast.error("Payment gateway is not available. Please try again later.");
-          setIsLoading(false);
-          return;
+      const { orderId, amount, currency } = orderResponse.data;
+      
+      if (!window.Razorpay) {
+          throw new Error("Razorpay SDK is not loaded. Please check your internet connection.");
+      }
+
+      const options = {
+        key: config.RAZORPAY_KEY_ID,
+        amount: amount,
+        currency: currency,
+        name: "A.M. Comfort Inn",
+        description: "Room Booking Payment",
+        order_id: orderId,
+        handler: async function (response) {
+          try {
+            const verificationResponse = await bookingApi.verifyPayment({
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature
+            });
+
+            if (verificationResponse.success) {
+              toast.success("Payment successful!");
+              navigate(`/booking/status/${orderId}`);
+            } else {
+              throw new Error("Payment verification failed");
+            }
+          } catch (error) {
+            console.error("Payment verification failed:", error);
+            toast.error("Payment verification failed. Please contact support.");
+          }
+        },
+        prefill: {
+          name: guestData.fullName,
+          email: guestData.email,
+          contact: guestData.phone
+        },
+        theme: {
+          color: "#2563eb"
         }
+      };
 
-        const cashfree = new window.Cashfree({
-          mode: "sandbox", // Change to "production" for live
+      try {
+        const razorpay = new window.Razorpay(options);
+        
+        razorpay.on('payment.failed', function (response) {
+          console.error('Payment failed:', response.error);
+          toast.error(response.error.description || "Payment failed");
+          setIsLoading(false);
         });
 
-        toast.loading('Redirecting to payment...'); // Show loading toast *before* checkout
+        // Open Razorpay payment form
+        razorpay.open();
 
-        cashfree.checkout({
-          paymentSessionId: payment_session_id,
-        }).then((result) => {
-          // This .then() block runs *after* the popup closes or redirects
-          toast.dismiss(); // Clear the loading toast
-          setIsLoading(false); 
-          
-          if (result.error) {
-            toast.error(result.error.message || "Payment failed.");
-            console.error("Payment Error:", result.error);
-            // Maybe reset to step 1 or allow retry?
-            // setCurrentStep(1); 
-          }
-          if (result.redirect) {
-            // Usually nothing needed here if relying on webhook + return_url
-            console.log("Redirecting for bank authentication...");
-          }
-          if (result.paymentDetails) {
-            // Optional: Show immediate feedback, but webhook is the source of truth
-            console.log("Payment details received on client:", result.paymentDetails);
-            toast.success("Payment submitted! Awaiting final confirmation.");
-            // You might redirect based on your return_url here if needed,
-            // but the PaymentStatus component needs rethinking (see point 2)
-          }
-        }).catch(err => {
-            // Catch errors during the checkout initiation itself
-            toast.dismiss();
-            setIsLoading(false);
-            console.error("Cashfree checkout initiation error:", err);
-            toast.error("Could not start payment process. Please try again.");
-        });
-      // console.log("Proceed to payment with:", paymentData);
-      // toast.success("Your order is ready. Redirecting to payment...");
-      // initiateCashfreePayment(paymentData);
+        // Store booking reference
+        localStorage.setItem('lastBookingRef', JSON.stringify({
+          bookingId: orderId,
+          timestamp: Date.now()
+        }));
+
+      } catch (error) {
+        console.error("Payment processing error:", error);
+        toast.dismiss();
+        setIsLoading(false);
+        throw error;
+      }
     } catch (error) {
       toast.dismiss();
       toast.error(error.message || "An unknown error occurred.");

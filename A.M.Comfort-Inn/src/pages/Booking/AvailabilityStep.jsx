@@ -23,8 +23,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
   });
 
   const rooms = [
-    { name: 'Standard Room', description: '1 Private Bedroom, Shared kitchen and Hall.' },
-    { name: 'Deluxe Room', description: '2 BHK' }
+    { name: 'Standard Room', dbName: 'standard', description: '1 Private Bedroom, Shared kitchen and Hall.' },
+    { name: 'Deluxe Room', dbName: 'deluxe', description: '2 BHK' }
   ];
 
   const roomType = watch('roomType');
@@ -43,9 +43,14 @@ export const AvailabilityStep = ({ onSuccess }) => {
     setIsLoading(true);
     toast.loading('Checking availability...');
     try {
+      // Get the database room name
+      const selectedRoom = rooms.find(r => r.name === data.roomType);
+      const dbRoomType = selectedRoom?.dbName || data.roomType;
+
       // Add standard check-in and check-out times
       const requestData = {
         ...data,
+        roomType: dbRoomType, // ✅ Use database room name
         checkInDate: new Date().toISOString().split('T')[0], // Today's date
         checkInTime: "12:00:00", // 12:00 PM
         checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow's date

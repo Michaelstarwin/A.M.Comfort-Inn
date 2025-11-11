@@ -75,12 +75,32 @@ export const bookingApi = {
   checkAvailability: (data) => apiClient.post('/bookings/check-availability', data),
   preBook: (data) => apiClient.post('/bookings/pre-book', data),
   createOrder: (data) => apiClient.post('/bookings/payment/create-order', data),
+  verifyPayment: (data) => apiClient.post('/payment/verify', data),
   getBooking: (referenceNumber) => apiClient.get(`/bookings/${referenceNumber}`),
+  getAllBookings: (filters) => apiClient.get('/bookings/admin/all', { params: filters }),
+  updateBookingStatus: (bookingId, status) => apiClient.put(`/bookings/${bookingId}/status`, { status }),
+};
+
+export const roomApi = {
+  getRooms: () => apiClient.get('/bookings/rooms'),
+  getRoomAvailability: (params) => apiClient.get('/bookings/rooms/availability', { params }),
 };
 
 export const adminApi = {
+  // Room Management
   getRooms: () => apiClient.get('/bookings/admin/inventory/room-types'),
   createRoom: (data) => apiClient.post('/bookings/admin/inventory/room-types', data),
   updateRoom: (roomId, data) => apiClient.put(`/bookings/admin/inventory/room-types/${roomId}`, data),
   deleteRoom: (roomId) => apiClient.delete(`/bookings/admin/inventory/room-types/${roomId}`),
+  
+  // Booking Management
+  getBookings: (filters = {}) => apiClient.get('/bookings/admin/bookings', { params: filters }),
+  getBookingDetails: (bookingId) => apiClient.get(`/bookings/admin/bookings/${bookingId}`),
+  updateBookingStatus: (bookingId, status) => apiClient.put(`/bookings/admin/bookings/${bookingId}/status`, { status }),
+  
+  // Analytics
+  getAnalytics: (period = 'month') => apiClient.get('/bookings/admin/analytics', { params: { period } }),
+  getRevenue: (period = 'month') => apiClient.get('/bookings/admin/analytics/revenue', { params: { period } }),
+  getOccupancyStats: () => apiClient.get('/bookings/admin/analytics/occupancy'),
+  getTopRoomTypes: () => apiClient.get('/bookings/admin/analytics/top-rooms'),
 };
