@@ -4,6 +4,8 @@ import { Toaster, toast } from 'react-hot-toast';
 import { adminApi } from '../../utils/api';
 import { RoomInventoryForm } from './RoomInventoryForm';
 import { RoomInventoryList } from './RoomInventoryList';
+import { BookingsManagement } from './BookingsManagement';
+import { AnalyticsDashboard } from './AnalyticsDashboard';
 import { AdminLoginPrompt } from '../../components/admin/AdminLoginPrompt';
 
 const AdminDashboard = () => {
@@ -139,8 +141,8 @@ const AdminDashboard = () => {
               </div>
             </div>
           } />
-          <Route path="/bookings" element={<div>Bookings Management - Coming Soon</div>} />
-          <Route path="/analytics" element={<div>Analytics Dashboard - Coming Soon</div>} />
+          <Route path="/bookings" element={<BookingsManagement />} />
+          <Route path="/analytics" element={<AnalyticsDashboard />} />
         </Routes>
       </div>
     </div>

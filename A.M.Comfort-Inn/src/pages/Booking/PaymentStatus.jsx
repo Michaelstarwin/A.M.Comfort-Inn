@@ -1,37 +1,35 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 export const PaymentStatus = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [message, setMessage] = useState('Processing your payment...');
   const [isError, setIsError] = useState(false);
 
   useEffect(() => {
-    // Get parameters from Cashfree redirect URL
-    const orderId = searchParams.get('order_id');
-    const orderStatus = searchParams.get('order_status');
+    // Check booking status from localStorage
+    const checkBookingStatus = async () => {
+      try {
+        const bookingRef = localStorage.getItem('lastBookingRef');
+        if (!bookingRef) {
+          setMessage('Booking information not found. Please contact support.');
+          setIsError(true);
+          return;
+        }
 
-    if (orderId) {
-      if (orderStatus === 'SUCCESS') {
-        setMessage('Thank you for your payment! Your booking is being processed and you will receive a confirmation email shortly.');
+        // For Razorpay, the payment handler already verified the payment
+        // So if we're here, the payment was successful
+        setMessage('✓ Thank you for your payment! Your booking is confirmed. You will receive a confirmation email shortly.');
         setIsError(false);
-      } else if (orderStatus === 'CANCELLED') {
-        setMessage('Your payment was cancelled. You can try booking again.');
+      } catch (error) {
+        console.error('Error checking booking status:', error);
+        setMessage('There was an issue processing your payment. Please contact support.');
         setIsError(true);
-      } else if (orderStatus === 'FAILED') {
-        setMessage('Your payment failed. Please try again.');
-        setIsError(true);
-      } else {
-        // Default to success if status is not provided but order_id is present
-        setMessage('Thank you for your payment! Your booking is being processed and you will receive a confirmation email shortly.');
-        setIsError(false);
       }
-    } else {
-      setMessage('There was an issue processing your payment return status.');
-      setIsError(true);
-    }
-  }, [searchParams]);
+    };
+
+    checkBookingStatus();
+  }, []);
 
   // ... (rest of the component to display message and buttons)
 

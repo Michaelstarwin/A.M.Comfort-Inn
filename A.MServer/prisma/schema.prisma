@@ -14,11 +14,6 @@ enum BookingPaymentStatus {
   Refunded
 }
 
-enum PaymentTransactionStatus {
-  Received
-  Failed
-}
-
 enum RoomStatus {
   Active
   Inactive
@@ -41,13 +36,15 @@ enum UserRole {
 // ===============================================
 
 model RoomInventory {
-  roomId      String   @id @default(cuid())
-  roomType    String   @unique // e.g., 'Deluxe', 'Standard', 'Suite'
-  totalRooms  Int
-  currentRate Float
-  status      RoomStatus @default(Active)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  roomId       String   @id @default(cuid())
+  roomType     String   @unique // e.g., 'Deluxe', 'Standard', 'Suite'
+  totalRooms   Int
+  currentRate  Float
+  status       RoomStatus @default(Active)
+  description  String?  // Room description and amenities
+  imageUrl     String?  // URL to room image
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   bookings Booking[]
 
@@ -55,46 +52,29 @@ model RoomInventory {
 }
 
 model Booking {
-  bookingId       String   @id @default(cuid())
-  userId          String?
-  guestInfo       Json // Guest details: {fullName, email, phone, country}
-  checkInDate     DateTime
-  checkInTime     String // HH:MM:SS format
-  checkOutDate    DateTime
-  checkOutTime    String // HH:MM:SS format
-  roomCount       Int
-  roomType        String
-  totalAmount     Float
-  paymentStatus   BookingPaymentStatus @default(Pending)
-  cashfreeOrderId String?  @unique
-  referenceNumber String?  @unique // Generated after successful payment
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  bookingId         String   @id @default(cuid())
+  userId            String?
+  guestInfo         Json // Guest details: {fullName, email, phone, country}
+  checkInDate       DateTime
+  checkInTime       String // HH:MM:SS format
+  checkOutDate      DateTime
+  checkOutTime      String // HH:MM:SS format
+  roomCount         Int
+  roomType          String
+  totalAmount       Float
+  paymentStatus     BookingPaymentStatus @default(Pending)
+  paymentOrderId    String?  @unique // Razorpay order ID
+  paymentId         String?  @unique // Razorpay payment ID
+  referenceNumber   String?  @unique // Generated after successful payment
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   // --- Relations ---
-  paymentTransaction PaymentTransaction?
-  roomInventoryId    String
-  roomInventory      RoomInventory @relation(fields: [roomInventoryId], references: [roomId])
-  user               User?         @relation(fields: [userId], references: [id])
-
+  roomInventoryId   String
+  roomInventory     RoomInventory @relation(fields: [roomInventoryId], references: [roomId])
+  user              User?         @relation(fields: [userId], references: [id])
 
   @@map("bookings")
-}
-
-model PaymentTransaction {
-  cashfreeOrderId        String                   @id
-  bookingId              String                   @unique
-  transactionId          String?
-  paymentMode            String?
-  amount                 Float
-  status                 PaymentTransactionStatus
-  gatewayResponsePayload Json
-  createdAt              DateTime                 @default(now())
-
-  // --- Relation ---
-  booking Booking @relation(fields: [bookingId], references: [bookingId])
-
-  @@map("payment_transactions")
 }
 
 
