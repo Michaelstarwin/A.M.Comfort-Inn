@@ -2,11 +2,12 @@
   "name": "am-comfort-inn-server",
   "version": "1.0.0",
   "description": "",
-  "main": "src/app.ts",
+  "main": "dist/app.js",
   "scripts": {
     "build": "npx tsc",
     "start": "node dist/app.js",
-    "dev": "nodemon src/app.ts"
+    "dev": "nodemon src/app.ts",
+    "postinstall": "npxprisma generate"
   },
   "author": "AMcinn",
   "license": "ISC",
