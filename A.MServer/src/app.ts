@@ -6,6 +6,7 @@ import cors from "cors";
 // Import routes
 import bookingRoutes from './modules/booking/booking.route';
 import transactionRoutes from './modules/transaction/transaction.route';
+import adminRoutes from './modules/admin/admin.route';
 
 // For async error handling
 import "express-async-errors";
@@ -32,6 +33,7 @@ app.set("port", port);
 // --- API Routes ---
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/transactions', express.json(), transactionRoutes);
+app.use('/api/admin', express.json(), adminRoutes);
 
 
 // --- Static Assets ---

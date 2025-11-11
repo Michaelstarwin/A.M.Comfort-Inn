@@ -26,7 +26,7 @@ export const RoomInventoryForm = ({ selectedRoom, onSuccess, onClear }) => {
   const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(roomSchema),
     defaultValues: {
-      roomType: selectedRoom?.roomType || '',
+      roomType: selectedRoom?.roomType ,
       totalRooms: selectedRoom?.totalRooms || 1,
       currentRate: selectedRoom?.currentRate || 1000,
       status: selectedRoom?.status || 'Active',

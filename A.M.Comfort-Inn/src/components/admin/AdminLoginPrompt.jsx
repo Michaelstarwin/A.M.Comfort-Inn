@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import AdminCreateForm from './AdminCreateForm';
 
 export const AdminLoginPrompt = ({ onLogin }) => {
   const [adminId, setAdminId] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -9,6 +11,17 @@ export const AdminLoginPrompt = ({ onLogin }) => {
       onLogin(adminId);
     }
   };
+
+  if (showCreate) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100">
+        <div className="p-8 bg-white shadow-xl rounded-lg max-w-md w-full">
+          <h2 className="text-2xl font-bold text-center text-gray-800 mb-6">Create Admin User</h2>
+          <AdminCreateForm onCreated={(id) => { setShowCreate(false); setAdminId(id); }} onCancel={() => setShowCreate(false)} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100">
@@ -36,6 +49,11 @@ export const AdminLoginPrompt = ({ onLogin }) => {
             Authenticate
           </button>
         </form>
+
+        <div className="mt-4 text-center">
+          <p className="text-sm text-gray-600">No admin user yet?</p>
+          <button onClick={() => setShowCreate(true)} className="mt-2 text-indigo-600 hover:underline">Create Admin</button>
+        </div>
       </div>
     </div>
   );

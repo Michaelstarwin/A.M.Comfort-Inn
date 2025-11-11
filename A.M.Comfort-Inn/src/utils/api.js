@@ -5,20 +5,43 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
-  async request(endpoint, options = {}) {
+   async request(endpoint, options = {}) {
     const url = `${this.baseURL}${endpoint}`;
-    const config = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-      ...options,
+
+    // pull out body and headers from options
+    const { headers = {}, body, ...restOptions } = options;
+
+    // detect FormData
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
+    // don't force Content-Type when sending FormData (browser will set boundary)
+    const mergedHeaders = {
+      ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
+      ...headers,
     };
 
-    // Add admin user ID header if available
+    const config = {
+      headers: mergedHeaders,
+      ...restOptions,
+    };
+
+    // attach admin header if present
     const adminId = localStorage.getItem('adminUserId');
     if (adminId) {
       config.headers['x-user-id'] = adminId;
+    }
+
+    // body handling: send FormData as-is, stringify plain objects
+    if (body !== undefined && body !== null) {
+      if (isFormData) {
+        config.body = body;
+        // ensure we didn't accidentally set Content-Type
+        if (config.headers['Content-Type']) delete config.headers['Content-Type'];
+      } else if (typeof body === 'string') {
+        config.body = body;
+      } else {
+        config.body = JSON.stringify(body);
+      }
     }
 
     try {
@@ -29,7 +52,14 @@ class ApiClient {
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      return await response.json();
+      // handle no-content responses gracefully
+      if (response.status === 204) return null;
+
+      const contentType = response.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        return await response.json();
+      }
+      return await response.text();
     } catch (error) {
       console.error('API request failed:', error);
       throw error;
@@ -42,11 +72,12 @@ class ApiClient {
   }
 
   // POST request
+   // POST request
   async post(endpoint, data, options = {}) {
     return this.request(endpoint, {
       ...options,
       method: 'POST',
-      body: JSON.stringify(data),
+      body: data, // <-- pass FormData or object; request() will stringify if needed
     });
   }
 
@@ -55,9 +86,10 @@ class ApiClient {
     return this.request(endpoint, {
       ...options,
       method: 'PUT',
-      body: JSON.stringify(data),
+      body: data,
     });
   }
+
 
   // DELETE request
   async delete(endpoint, options = {}) {
@@ -103,4 +135,6 @@ export const adminApi = {
   getRevenue: (period = 'month') => apiClient.get('/bookings/admin/analytics/revenue', { params: { period } }),
   getOccupancyStats: () => apiClient.get('/bookings/admin/analytics/occupancy'),
   getTopRoomTypes: () => apiClient.get('/bookings/admin/analytics/top-rooms'),
+  // Admin user management
+  createAdmin: (data) => apiClient.post('/admin/users', data),
 };
