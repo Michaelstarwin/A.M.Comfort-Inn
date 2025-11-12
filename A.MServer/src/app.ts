@@ -29,15 +29,15 @@ app.use(express.urlencoded({ extended: true }));
 app.set("host", host);
 app.set("port", port);
 
-
+app.get('/api/admin/test', (req, res) => {
+  res.json({ message: 'Direct route works!' });
+});
 // --- API Routes ---
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/admin', adminRoutes);
 // Add this RIGHT AFTER your other routes
-app.get('/api/admin/test', (req, res) => {
-  res.json({ message: 'Direct route works!' });
-});
+
 console.log('Admin routes mounted:', adminRoutes.stack?.length || 'Router check');
 
 // --- Static Assets ---
