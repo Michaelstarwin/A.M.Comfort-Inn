@@ -1,15 +1,15 @@
 // API Configuration for different environments
 const configs = {
   development: {
-    API_URL: 'http://localhost:7700/api',
+    API_URL: 'https://a-m-comfort-inn.onrender.com/api',
     RAZORPAY_KEY_ID: import.meta.env.VITE_RAZORPAY_KEY_ID,
   },
   production: {
-    API_URL: import.meta.env.VITE_API_BASE_URL || 'https://api.amcomfortinn.com/api',
+    API_URL: import.meta.env.VITE_API_BASE_URL || 'https://a-m-comfort-inn.onrender.com/api',
     RAZORPAY_KEY_ID: import.meta.env.VITE_RAZORPAY_KEY_ID,
   },
   test: {
-    API_URL: 'http://localhost:7700/api',
+    API_URL: 'https://a-m-comfort-inn.onrender.com/api',
     CASHFREE_MODE: 'sandbox',
   }
 };
