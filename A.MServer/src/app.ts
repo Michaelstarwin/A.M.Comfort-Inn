@@ -34,7 +34,11 @@ app.set("port", port);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/admin', adminRoutes);
-
+// Add this RIGHT AFTER your other routes
+app.get('/api/admin/test', (req, res) => {
+  res.json({ message: 'Direct route works!' });
+});
+console.log('Admin routes mounted:', adminRoutes.stack?.length || 'Router check');
 
 // --- Static Assets ---
 // Serve uploaded files
@@ -42,19 +46,18 @@ if (process.env.NODE_ENV !== 'production') {
   app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 }
 
-app.get('/_routes', (req, res) => {
-  const routes: any[] = [];
-  (app as any)._router.stack.forEach((layer: any) => {
+app.get('/_routes', (req,res) => {
+  const routes:any[] = [];
+  (app as any)._router.stack.forEach((layer:any) => {
     if (layer.route && layer.route.path) {
       routes.push({ path: layer.route.path, methods: Object.keys(layer.route.methods) });
-    } else if (layer.name === 'router') {
-      layer.handle.stack.forEach((l: any) => {
-        if (l.route) routes.push({ path: l.route.path, methods: Object.keys(l.route.methods) });
-      });
+    } else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+      layer.handle.stack.forEach((l:any) => { if (l.route) routes.push({ path: l.route.path, methods: Object.keys(l.route.methods) }); });
     }
   });
   res.json(routes);
 });
+
 
 
 // --- Health Check Endpoint ---
