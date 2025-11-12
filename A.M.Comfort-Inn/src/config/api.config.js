@@ -2,11 +2,11 @@
 const configs = {
   development: {
     API_URL: 'https://a-m-comfort-inn.onrender.com/api',
-    RAZORPAY_KEY_ID: import.meta.env.VITE_RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_ID: 'rzp_live_ReLY6mzsl6jXJN',
   },
   production: {
     API_URL: import.meta.env.VITE_API_BASE_URL || 'https://a-m-comfort-inn.onrender.com/api',
-    RAZORPAY_KEY_ID: import.meta.env.VITE_RAZORPAY_KEY_ID,
+    RAZORPAY_KEY_ID: 'rzp_live_ReLY6mzsl6jXJN',
   },
   test: {
     API_URL: 'https://a-m-comfort-inn.onrender.com/api',
