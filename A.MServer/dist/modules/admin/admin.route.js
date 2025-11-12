@@ -50,5 +50,14 @@ router.post('/users', async (req, res) => {
         res.status(400).json({ success: false, message: err.message || 'Error creating admin user' });
     }
 });
+router.get('/users', async (req, res) => {
+    try {
+        const users = await AdminService.getAllUsers();
+        res.status(200).json({ success: true, data: users });
+    }
+    catch (err) {
+        res.status(400).json({ success: false, message: err.message || 'Error fetching users' });
+    }
+});
 exports.default = router;
 //# sourceMappingURL=admin.route.js.map

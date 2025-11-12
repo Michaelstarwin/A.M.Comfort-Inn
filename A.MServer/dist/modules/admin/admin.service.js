@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createAdminUser = createAdminUser;
+exports.getAllUsers = getAllUsers;
 const db_1 = require("../../shared/lib/db");
 async function createAdminUser(payload) {
     const email = (payload.email || '').trim().toLowerCase();
@@ -22,5 +23,12 @@ async function createAdminUser(payload) {
         },
     });
     return user;
+}
+async function getAllUsers() {
+    const users = await db_1.db.user.findMany({
+        select: { id: true, email: true, name: true, role: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+    });
+    return users;
 }
 //# sourceMappingURL=admin.service.js.map
