@@ -4,9 +4,16 @@ import { Request } from "express";
 
 const maxSize = 2 * 1024 * 1024;
 
+const uploadsBaseDir = process.env.UPLOADS_DIR || 'uploads/';
+// Ensure the directory exists
+import fs from 'fs';
+if (!fs.existsSync(uploadsBaseDir)) {
+  fs.mkdirSync(uploadsBaseDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, 'uploads/');
+    cb(null, uploadsBaseDir);
   },
   filename: (req: Request, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
