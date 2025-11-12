@@ -22,6 +22,23 @@ export const checkAvailabilitySchema = z.object({
 // We infer the TypeScript type from the schema's body for use in our service layer.
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema.shape.body>;
 
+export const availabilityStatusSchema = z.object({
+  query: z.object({
+    checkInDate: z.string().date("Invalid check-in date format. Use YYYY-MM-DD."),
+    checkOutDate: z.string().date("Invalid check-out date format. Use YYYY-MM-DD."),
+    checkInTime: z.string().regex(timeRegex, "Invalid check-in time format. Use HH:MM:SS.").optional(),
+    checkOutTime: z.string().regex(timeRegex, "Invalid check-out time format. Use HH:MM:SS.").optional(),
+  }).refine(
+    data => `${data.checkInDate}T${data.checkInTime ?? '12:00:00'}` < `${data.checkOutDate}T${data.checkOutTime ?? '11:00:00'}`,
+    {
+      message: "Check-out date and time must be after check-in date and time.",
+      path: ["checkOutDate"],
+    }
+  ),
+});
+
+export type AvailabilityStatusRequest = z.infer<typeof availabilityStatusSchema.shape.query>;
+
 
 // Schema for the 'pre-book' endpoint.
 export const preBookSchema = z.object({

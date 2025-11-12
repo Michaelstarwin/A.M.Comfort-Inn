@@ -6,11 +6,30 @@ class ApiClient {
   }
 
    async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
+    const { headers = {}, body, params, ...restOptions } = options;
+    let url = `${this.baseURL}${endpoint}`;
+
+    if (params && typeof params === 'object') {
+      const searchParams = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value === undefined || value === null) {
+          return;
+        }
+
+        if (Array.isArray(value)) {
+          value.forEach(item => searchParams.append(key, String(item)));
+        } else {
+          searchParams.append(key, String(value));
+        }
+      });
+
+      const queryString = searchParams.toString();
+      if (queryString) {
+        url += (url.includes('?') ? '&' : '?') + queryString;
+      }
+    }
 
     // pull out body and headers from options
-    const { headers = {}, body, ...restOptions } = options;
-
     // detect FormData
     const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
 
@@ -108,6 +127,7 @@ export const bookingApi = {
   preBook: (data) => apiClient.post('/bookings/pre-book', data),
   createOrder: (data) => apiClient.post('/bookings/payment/create-order', data),
   verifyPayment: (data) => apiClient.post('/payment/verify', data),
+  getAvailabilityStatus: (params) => apiClient.get('/bookings/availability/status', { params }),
   getBooking: (referenceNumber) => apiClient.get(`/bookings/${referenceNumber}`),
   getAllBookings: (filters) => apiClient.get('/bookings/admin/all', { params: filters }),
   updateBookingStatus: (bookingId, status) => apiClient.put(`/bookings/${bookingId}/status`, { status }),

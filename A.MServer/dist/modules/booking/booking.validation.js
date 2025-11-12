@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRoomSchema = exports.createRoomSchema = exports.createOrderSchema = exports.preBookSchema = exports.checkAvailabilitySchema = void 0;
+exports.updateRoomSchema = exports.createRoomSchema = exports.createOrderSchema = exports.preBookSchema = exports.availabilityStatusSchema = exports.checkAvailabilitySchema = void 0;
 const zod_1 = require("zod");
 // A regular expression to validate time in HH:MM:SS format.
 const timeRegex = /^(?:2[0-3]|[01]?[0-9]):[0-5][0-9]:[0-5][0-9]$/;
@@ -18,6 +18,17 @@ exports.checkAvailabilitySchema = zod_1.z.object({
         message: "Check-out date and time must be after check-in date and time.",
         path: ["checkOutDate"], // Associates the error with the checkOutDate field.
     })
+});
+exports.availabilityStatusSchema = zod_1.z.object({
+    query: zod_1.z.object({
+        checkInDate: zod_1.z.string().date("Invalid check-in date format. Use YYYY-MM-DD."),
+        checkOutDate: zod_1.z.string().date("Invalid check-out date format. Use YYYY-MM-DD."),
+        checkInTime: zod_1.z.string().regex(timeRegex, "Invalid check-in time format. Use HH:MM:SS.").optional(),
+        checkOutTime: zod_1.z.string().regex(timeRegex, "Invalid check-out time format. Use HH:MM:SS.").optional(),
+    }).refine(data => `${data.checkInDate}T${data.checkInTime ?? '12:00:00'}` < `${data.checkOutDate}T${data.checkOutTime ?? '11:00:00'}`, {
+        message: "Check-out date and time must be after check-in date and time.",
+        path: ["checkOutDate"],
+    }),
 });
 // Schema for the 'pre-book' endpoint.
 exports.preBookSchema = zod_1.z.object({

@@ -46,6 +46,16 @@ const razorpay_service_1 = require("../payment/razorpay.service");
 const router = express_1.default.Router();
 const razorpayService = new razorpay_service_1.RazorpayService();
 // --- Public Routes ---
+router.get('/availability/status', (0, validate_middleware_1.validate)(booking_validation_1.availabilityStatusSchema), async (req, res) => {
+    const { checkInDate, checkOutDate, checkInTime, checkOutTime } = req.query;
+    const status = await BookingService.getAvailabilityStatus({
+        checkInDate: checkInDate,
+        checkOutDate: checkOutDate,
+        checkInTime: checkInTime,
+        checkOutTime: checkOutTime,
+    });
+    res.status(200).json({ success: true, data: status });
+});
 // FR 3.1: Check room availability
 router.post('/check-availability', (0, validate_middleware_1.validate)(booking_validation_1.checkAvailabilitySchema), async (req, res) => {
     const result = await BookingService.checkAvailability(req.body);
@@ -91,6 +101,16 @@ router.post('/payment/razorpay-webhook', express_1.default.raw({ type: 'applicat
     catch (error) {
         console.error('Webhook processing error:', error);
         res.status(400).json({ status: 'error', message: error.message });
+    }
+});
+// Public: Get all bookings (optional)
+router.get('/', async (req, res) => {
+    try {
+        const bookings = await BookingService.getAllBookings(); // Service call
+        res.status(200).json({ success: true, data: bookings });
+    }
+    catch (error) {
+        res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: error.message });
     }
 });
 // Get final booking details by reference number

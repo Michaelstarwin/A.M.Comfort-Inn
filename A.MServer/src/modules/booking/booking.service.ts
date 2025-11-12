@@ -1,12 +1,82 @@
 import { PrismaClient, BookingPaymentStatus } from '@prisma/client';
 import crypto from 'crypto';
-import { CheckAvailabilityRequest, PreBookRequest, CreateOrderRequest, CreateRoomRequest, UpdateRoomRequest } from './booking.validation';
+import { CheckAvailabilityRequest, AvailabilityStatusRequest, PreBookRequest, CreateOrderRequest, CreateRoomRequest, UpdateRoomRequest } from './booking.validation';
 import { db } from '../../shared/lib/db';
 import { sendBookingConfirmationEmail } from '../../shared/lib/utils/sendEmail';
 
 // --- Razorpay Configuration ---
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:7700';
+
+type HouseAvailabilityState = {
+  totalRooms: number;
+  occupiedRooms: number;
+  standardRoomsAvailable: number;
+  deluxeAvailable: boolean;
+};
+
+async function computeHouseAvailability(checkInDateTime: Date, checkOutDateTime: Date): Promise<HouseAvailabilityState> {
+  const activeInventories = await db.roomInventory.findMany({
+    where: {
+      roomType: { in: ['standard', 'deluxe'] },
+      status: 'Active',
+    },
+    select: {
+      roomType: true,
+      totalRooms: true,
+    },
+  });
+
+  const configuredTotalRooms = activeInventories.reduce(
+    (max, inventory) => Math.max(max, inventory.totalRooms ?? 0),
+    0
+  );
+
+  const totalRooms = configuredTotalRooms > 0 ? configuredTotalRooms : 2;
+
+  const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000);
+
+  const overlappingBookings = await db.booking.findMany({
+    where: {
+      checkInDate: { lt: checkOutDateTime },
+      checkOutDate: { gt: checkInDateTime },
+      OR: [
+        { paymentStatus: BookingPaymentStatus.Success },
+        {
+          paymentStatus: BookingPaymentStatus.Pending,
+          createdAt: { gt: pendingBookingExpiryTime },
+        },
+      ],
+    },
+    select: {
+      roomType: true,
+      roomCount: true,
+    },
+  });
+
+  let occupiedRooms = 0;
+  let deluxeOccupied = false;
+
+  for (const booking of overlappingBookings) {
+    if (booking.roomType === 'deluxe') {
+      deluxeOccupied = true;
+      occupiedRooms = totalRooms;
+      break;
+    }
+
+    occupiedRooms += booking.roomCount;
+  }
+
+  const standardRoomsAvailable = Math.max(totalRooms - occupiedRooms, 0);
+  const deluxeAvailable = !deluxeOccupied && occupiedRooms === 0;
+
+  return {
+    totalRooms,
+    occupiedRooms,
+    standardRoomsAvailable,
+    deluxeAvailable,
+  };
+}
 
 // ✅ Added this function (for GET /api/bookings)
 export async function getAllBookings() {
@@ -51,37 +121,101 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
     };
   }
 
-  const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000);
-
-  const overlappingBookings = await db.booking.findMany({
-    where: {
-      checkInDate: { lt: checkOutDateTime },
-      checkOutDate: { gt: checkInDateTime },
-      OR: [
-        { paymentStatus: BookingPaymentStatus.Success },
-        {
-          paymentStatus: BookingPaymentStatus.Pending,
-          createdAt: { gt: pendingBookingExpiryTime },
-        },
-      ],
-    },
-  });
-
-  const isAvailable = overlappingBookings.length === 0;
-  const availableRooms = isAvailable ? 1 : 0;
-
   const durationMillis = checkOutDateTime.getTime() - checkInDateTime.getTime();
   const nights = Math.max(1, Math.ceil(durationMillis / (1000 * 60 * 60 * 24)));
-  const totalAmount = isAvailable ? roomInventory.currentRate * nights : 0;
+  const houseState = await computeHouseAvailability(checkInDateTime, checkOutDateTime);
+
+  if (request.roomType === 'deluxe') {
+    if (!houseState.deluxeAvailable) {
+      return {
+        isAvailable: false,
+        totalAmount: 0,
+        ratePerNight: roomInventory.currentRate,
+        availableRooms: 0,
+        nights,
+        pricingMode: 'package' as const,
+        message: 'Conflict: The home is already booked for the selected dates.',
+      };
+    }
+
+    return {
+      isAvailable: true,
+      totalAmount: roomInventory.currentRate,
+      ratePerNight: roomInventory.currentRate,
+      availableRooms: houseState.totalRooms,
+      nights,
+      pricingMode: 'package' as const,
+      message: 'Success: The entire home is available for the selected dates.',
+    };
+  }
+
+  if (!houseState.deluxeAvailable && houseState.standardRoomsAvailable === 0) {
+    return {
+      isAvailable: false,
+      totalAmount: 0,
+      ratePerNight: roomInventory.currentRate,
+      availableRooms: 0,
+      nights,
+      pricingMode: 'nightly' as const,
+      message: 'Conflict: The home is already booked for the selected dates.',
+    };
+  }
+
+  const allowedStandardRooms = Math.min(
+    houseState.standardRoomsAvailable,
+    roomInventory.totalRooms ?? houseState.standardRoomsAvailable
+  );
+
+  if (allowedStandardRooms <= 0) {
+    return {
+      isAvailable: false,
+      totalAmount: 0,
+      ratePerNight: roomInventory.currentRate,
+      availableRooms: 0,
+      message: 'Conflict: The home is already booked for the selected dates.',
+    };
+  }
+
+  if (allowedStandardRooms < request.roomCount) {
+    return {
+      isAvailable: false,
+      totalAmount: 0,
+      ratePerNight: roomInventory.currentRate,
+      availableRooms: allowedStandardRooms,
+      nights,
+      pricingMode: 'nightly' as const,
+      message:
+        allowedStandardRooms > 0
+          ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.`
+          : 'Conflict: The home is already booked for the selected dates.',
+    };
+  }
 
   return {
-    isAvailable,
-    totalAmount,
+    isAvailable: true,
+    totalAmount: roomInventory.currentRate * request.roomCount * nights,
     ratePerNight: roomInventory.currentRate,
-    availableRooms,
-    message: isAvailable
-      ? 'Success: The home is available for the selected dates.'
-      : 'Conflict: The home is already booked for the selected dates.',
+    availableRooms: allowedStandardRooms,
+    nights,
+    pricingMode: 'nightly' as const,
+    message: `Success: ${allowedStandardRooms} room(s) are currently available.`,
+  };
+}
+
+export async function getAvailabilityStatus(request: AvailabilityStatusRequest) {
+  const checkInTime = request.checkInTime ?? '12:00:00';
+  const checkOutTime = request.checkOutTime ?? '11:00:00';
+
+  const checkInDateTime = new Date(`${request.checkInDate}T${checkInTime}`);
+  const checkOutDateTime = new Date(`${request.checkOutDate}T${checkOutTime}`);
+
+  const state = await computeHouseAvailability(checkInDateTime, checkOutDateTime);
+
+  return {
+    totalRooms: state.totalRooms,
+    occupiedRooms: state.occupiedRooms,
+    standardRoomsAvailable: state.standardRoomsAvailable,
+    deluxeAvailable: state.deluxeAvailable,
   };
 }
 
@@ -223,6 +357,29 @@ export async function deleteRoomType(roomId: string) {
 }
 
 // --- Admin Bookings ---
+export async function getBookingDetailsAdmin(bookingId: string) {
+  return db.booking.findUniqueOrThrow({
+    where: { bookingId },
+    include: {
+      roomInventory: true,
+      user: true,
+    },
+  });
+}
+
+export async function updateBookingStatus(bookingId: string, status: string) {
+  const paymentStatus = status as BookingPaymentStatus;
+
+  if (!Object.values(BookingPaymentStatus).includes(paymentStatus)) {
+    throw new Error('Invalid booking status supplied.');
+  }
+
+  return db.booking.update({
+    where: { bookingId },
+    data: { paymentStatus, updatedAt: new Date() },
+  });
+}
+
 export async function getAdminBookings(filters: { status?: string; search?: string; page: number; limit: number }) {
   const { status, search, page, limit } = filters;
   const skip = (page - 1) * limit;

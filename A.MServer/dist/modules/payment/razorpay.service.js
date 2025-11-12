@@ -6,8 +6,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.RazorpayService = void 0;
 const razorpay_1 = __importDefault(require("razorpay"));
 const crypto_1 = __importDefault(require("crypto"));
-const db_1 = require("../../shared/lib/db");
 const client_1 = require("@prisma/client");
+const db_1 = require("../../shared/lib/db");
+const sendEmail_1 = require("../../shared/lib/utils/sendEmail");
 // Initialize Razorpay
 const razorpay = new razorpay_1.default({
     key_id: process.env.RAZORPAY_KEY_ID,
@@ -71,20 +72,13 @@ class RazorpayService {
             if (!bookingId) {
                 throw new Error('Booking ID not found in order notes');
             }
-            // Update booking status
-            await db_1.db.booking.update({
-                where: { bookingId },
-                data: {
-                    paymentStatus: client_1.BookingPaymentStatus.Success,
-                    paymentId,
-                    updatedAt: new Date()
-                }
-            });
+            // Update booking status and notify customer
+            const updatedBooking = await markBookingAsPaid(bookingId, paymentId);
             const paymentAmount = typeof payment.amount === 'number' ? payment.amount / 100 : 0;
             return {
                 success: true,
                 data: {
-                    bookingId,
+                    bookingId: updatedBooking.bookingId,
                     paymentId,
                     amount: paymentAmount,
                     status: payment.status
@@ -129,14 +123,7 @@ class RazorpayService {
         if (!bookingId) {
             throw new Error('Booking ID not found in order notes');
         }
-        await db_1.db.booking.update({
-            where: { bookingId },
-            data: {
-                paymentStatus: client_1.BookingPaymentStatus.Success,
-                paymentId: payment.id,
-                updatedAt: new Date()
-            }
-        });
+        await markBookingAsPaid(bookingId, payment.id);
     }
     async handlePaymentFailed(payment) {
         const order = await razorpay.orders.fetch(payment.order_id);
@@ -155,4 +142,58 @@ class RazorpayService {
     }
 }
 exports.RazorpayService = RazorpayService;
+async function markBookingAsPaid(bookingId, paymentId) {
+    const existingBooking = await db_1.db.booking.findUnique({ where: { bookingId } });
+    if (!existingBooking) {
+        throw new Error('Booking not found for payment confirmation');
+    }
+    if (existingBooking.paymentStatus === client_1.BookingPaymentStatus.Success) {
+        if (paymentId && !existingBooking.paymentId) {
+            await db_1.db.booking.update({
+                where: { bookingId },
+                data: { paymentId }
+            });
+            existingBooking.paymentId = paymentId;
+        }
+        return existingBooking;
+    }
+    const updateData = {
+        paymentStatus: client_1.BookingPaymentStatus.Success,
+        updatedAt: new Date()
+    };
+    if (paymentId) {
+        updateData.paymentId = paymentId;
+    }
+    const updatedBooking = await db_1.db.booking.update({
+        where: { bookingId },
+        data: updateData
+    });
+    await sendConfirmationEmail(updatedBooking);
+    return updatedBooking;
+}
+async function sendConfirmationEmail(booking) {
+    const guestInfo = booking.guestInfo;
+    const recipient = guestInfo?.email;
+    if (!recipient) {
+        console.warn(`Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
+        return;
+    }
+    const bookingDetails = {
+        bookingId: booking.bookingId,
+        checkInDate: booking.checkInDate.toISOString().split('T')[0],
+        checkInTime: booking.checkInTime,
+        checkOutDate: booking.checkOutDate.toISOString().split('T')[0],
+        checkOutTime: booking.checkOutTime,
+        roomType: booking.roomType,
+        roomCount: booking.roomCount,
+        totalAmount: booking.totalAmount,
+        guestInfo,
+    };
+    try {
+        await (0, sendEmail_1.sendBookingConfirmationEmail)(recipient, bookingDetails);
+    }
+    catch (error) {
+        console.error('Booking confirmation email failed:', error);
+    }
+}
 //# sourceMappingURL=razorpay.service.js.map

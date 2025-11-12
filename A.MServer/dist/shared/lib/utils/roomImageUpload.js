@@ -8,7 +8,8 @@ const multer_1 = __importDefault(require("multer"));
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
 // Ensure uploads directory exists
-const uploadsDir = path_1.default.join(__dirname, '../../uploads/rooms');
+const baseUploadsDir = process.env.UPLOADS_DIR || path_1.default.join(__dirname, '../../uploads');
+const uploadsDir = path_1.default.join(baseUploadsDir, 'rooms');
 if (!fs_1.default.existsSync(uploadsDir)) {
     fs_1.default.mkdirSync(uploadsDir, { recursive: true });
 }
