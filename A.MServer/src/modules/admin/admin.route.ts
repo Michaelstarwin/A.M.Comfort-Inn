@@ -3,6 +3,8 @@ import * as AdminService from './admin.service';
 
 const router = express.Router();
 
+console.log('AdminService loaded:', AdminService);
+
 // Create or promote a user to ADMIN role
 router.post('/users', async (req, res) => {
   try {
@@ -13,6 +15,9 @@ router.post('/users', async (req, res) => {
     res.status(400).json({ success: false, message: err.message || 'Error creating admin user' });
   }
 });
+
+console.log('POST route added, stack length:', router.stack.length);
+
 router.get('/users', async (req, res) => {
   try {
     const users = await AdminService.getAllUsers();
@@ -22,8 +27,8 @@ router.get('/users', async (req, res) => {
   }
 });
 
-console.log('Admin router stack:', router.stack.map((r: any) => ({
-  path: r.route?.path,
-  methods: r.route ? Object.keys(r.route.methods) : 'no route'
-})));
+console.log('GET route added, stack length:', router.stack.length);
+router.get('/users', async (req, res) => {
+  res.json({ message: 'Test - service disabled' });
+});
 export default router;
