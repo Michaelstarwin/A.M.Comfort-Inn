@@ -42,6 +42,20 @@ if (process.env.NODE_ENV !== 'production') {
   app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
 }
 
+app.get('/_routes', (req, res) => {
+  const routes: any[] = [];
+  (app as any)._router.stack.forEach((layer: any) => {
+    if (layer.route && layer.route.path) {
+      routes.push({ path: layer.route.path, methods: Object.keys(layer.route.methods) });
+    } else if (layer.name === 'router') {
+      layer.handle.stack.forEach((l: any) => {
+        if (l.route) routes.push({ path: l.route.path, methods: Object.keys(l.route.methods) });
+      });
+    }
+  });
+  res.json(routes);
+});
+
 
 // --- Health Check Endpoint ---
 app.get("/", (req: Request, res: Response) => {

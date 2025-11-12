@@ -20,5 +20,13 @@ export async function createAdminUser(payload: { email: string; name?: string })
     },
   });
 
+
   return user;
+}  
+ export async function getAllUsers() {
+  const users = await db.user.findMany({
+    select: { id: true, email: true, name: true, role: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  return users;
 }
