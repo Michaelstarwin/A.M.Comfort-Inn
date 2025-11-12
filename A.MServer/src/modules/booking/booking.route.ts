@@ -68,6 +68,16 @@ router.post('/payment/razorpay-webhook', express.raw({ type: 'application/json' 
     }
 });
 
+// Public: Get all bookings (optional)
+router.get('/', async (req, res) => {
+  try {
+    const bookings = await BookingService.getAllBookings(); // Service call
+    res.status(200).json({ success: true, data: bookings });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: error.message });
+  }
+});
+
 // Get final booking details by reference number
 router.get('/:referenceNumber', async (req, res) => {
     const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
