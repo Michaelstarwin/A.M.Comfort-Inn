@@ -27,14 +27,14 @@ app.use(express_1.default.urlencoded({ extended: true }));
 // Express configuration
 app.set("host", host);
 app.set("port", port);
+app.get('/api/admin/test', (req, res) => {
+    res.json({ message: 'Direct route works!' });
+});
 // --- API Routes ---
 app.use('/api/bookings', booking_route_1.default);
 app.use('/api/transactions', transaction_route_1.default);
 app.use('/api/admin', admin_route_1.default);
 // Add this RIGHT AFTER your other routes
-app.get('/api/admin/test', (req, res) => {
-    res.json({ message: 'Direct route works!' });
-});
 console.log('Admin routes mounted:', admin_route_1.default.stack?.length || 'Router check');
 // --- Static Assets ---
 // Serve uploaded files
