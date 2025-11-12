@@ -31,6 +31,11 @@ app.set("port", port);
 app.use('/api/bookings', booking_route_1.default);
 app.use('/api/transactions', transaction_route_1.default);
 app.use('/api/admin', admin_route_1.default);
+// Add this RIGHT AFTER your other routes
+app.get('/api/admin/test', (req, res) => {
+    res.json({ message: 'Direct route works!' });
+});
+console.log('Admin routes mounted:', admin_route_1.default.stack?.length || 'Router check');
 // --- Static Assets ---
 // Serve uploaded files
 if (process.env.NODE_ENV !== 'production') {
@@ -42,11 +47,9 @@ app.get('/_routes', (req, res) => {
         if (layer.route && layer.route.path) {
             routes.push({ path: layer.route.path, methods: Object.keys(layer.route.methods) });
         }
-        else if (layer.name === 'router') {
-            layer.handle.stack.forEach((l) => {
-                if (l.route)
-                    routes.push({ path: l.route.path, methods: Object.keys(l.route.methods) });
-            });
+        else if (layer.name === 'router' && layer.handle && layer.handle.stack) {
+            layer.handle.stack.forEach((l) => { if (l.route)
+                routes.push({ path: l.route.path, methods: Object.keys(l.route.methods) }); });
         }
     });
     res.json(routes);

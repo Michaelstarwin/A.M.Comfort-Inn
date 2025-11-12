@@ -59,5 +59,9 @@ router.get('/users', async (req, res) => {
         res.status(400).json({ success: false, message: err.message || 'Error fetching users' });
     }
 });
+console.log('Admin router stack:', router.stack.map((r) => ({
+    path: r.route?.path,
+    methods: r.route ? Object.keys(r.route.methods) : 'no route'
+})));
 exports.default = router;
 //# sourceMappingURL=admin.route.js.map
