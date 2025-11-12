@@ -1,88 +1,215 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.getAllBookings = getAllBookings;
 exports.checkAvailability = checkAvailability;
+exports.getAvailabilityStatus = getAvailabilityStatus;
 exports.preBook = preBook;
 exports.createOrder = createOrder;
-exports.handleCashfreeWebhook = handleCashfreeWebhook;
 exports.getBookingByReference = getBookingByReference;
 exports.getRoomInventory = getRoomInventory;
 exports.createRoomType = createRoomType;
 exports.updateRoomType = updateRoomType;
 exports.deleteRoomType = deleteRoomType;
-exports.getAdminBookings = getAdminBookings;
 exports.getBookingDetailsAdmin = getBookingDetailsAdmin;
 exports.updateBookingStatus = updateBookingStatus;
+exports.getAdminBookings = getAdminBookings;
 exports.getAnalytics = getAnalytics;
 exports.getRevenueAnalytics = getRevenueAnalytics;
 exports.getOccupancyStats = getOccupancyStats;
 exports.getTopRoomTypes = getTopRoomTypes;
-const client_1 = require("@prisma/client"); // Keep this if db isn't globally available, otherwise remove
-const db_1 = require("../../shared/lib/db"); // Use the shared instance
+const client_1 = require("@prisma/client");
+const db_1 = require("../../shared/lib/db");
 // --- Razorpay Configuration ---
-// Using Razorpay for payment processing
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 const BACKEND_URL = process.env.BACKEND_URL || 'http://localhost:7700';
-// --- Availability Check (Looks OK, uses 'db' now) ---
+async function computeHouseAvailability(checkInDateTime, checkOutDateTime) {
+    const activeInventories = await db_1.db.roomInventory.findMany({
+        where: {
+            roomType: { in: ['standard', 'deluxe'] },
+            status: 'Active',
+        },
+        select: {
+            roomType: true,
+            totalRooms: true,
+        },
+    });
+    const configuredTotalRooms = activeInventories.reduce((max, inventory) => Math.max(max, inventory.totalRooms ?? 0), 0);
+    const totalRooms = configuredTotalRooms > 0 ? configuredTotalRooms : 2;
+    const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000);
+    const overlappingBookings = await db_1.db.booking.findMany({
+        where: {
+            checkInDate: { lt: checkOutDateTime },
+            checkOutDate: { gt: checkInDateTime },
+            OR: [
+                { paymentStatus: client_1.BookingPaymentStatus.Success },
+                {
+                    paymentStatus: client_1.BookingPaymentStatus.Pending,
+                    createdAt: { gt: pendingBookingExpiryTime },
+                },
+            ],
+        },
+        select: {
+            roomType: true,
+            roomCount: true,
+        },
+    });
+    let occupiedRooms = 0;
+    let deluxeOccupied = false;
+    for (const booking of overlappingBookings) {
+        if (booking.roomType === 'deluxe') {
+            deluxeOccupied = true;
+            occupiedRooms = totalRooms;
+            break;
+        }
+        occupiedRooms += booking.roomCount;
+    }
+    const standardRoomsAvailable = Math.max(totalRooms - occupiedRooms, 0);
+    const deluxeAvailable = !deluxeOccupied && occupiedRooms === 0;
+    return {
+        totalRooms,
+        occupiedRooms,
+        standardRoomsAvailable,
+        deluxeAvailable,
+    };
+}
+// ✅ Added this function (for GET /api/bookings)
+async function getAllBookings() {
+    try {
+        const bookings = await db_1.db.booking.findMany({
+            orderBy: { createdAt: 'desc' },
+            select: {
+                bookingId: true,
+                referenceNumber: true,
+                roomType: true,
+                roomCount: true,
+                totalAmount: true,
+                paymentStatus: true,
+                checkInDate: true,
+                checkOutDate: true,
+                guestInfo: true,
+            },
+        });
+        return bookings;
+    }
+    catch (error) {
+        console.error('Error fetching all bookings:', error);
+        throw new Error('Failed to fetch bookings');
+    }
+}
+// --- Availability Check ---
 async function checkAvailability(request) {
     const checkInDateTime = new Date(`${request.checkInDate}T${request.checkInTime}`);
     const checkOutDateTime = new Date(`${request.checkOutDate}T${request.checkOutTime}`);
-    // Use shared 'db' instance
     const roomInventory = await db_1.db.roomInventory.findUnique({
         where: { roomType: request.roomType },
     });
     if (!roomInventory || roomInventory.status !== 'Active') {
-        return { isAvailable: false, totalAmount: 0, ratePerNight: 0, message: 'This room type is currently not available.' };
+        return {
+            isAvailable: false,
+            totalAmount: 0,
+            ratePerNight: 0,
+            availableRooms: 0,
+            message: 'This stay option is currently not available.',
+        };
     }
-    const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000); // 15 minutes ago
-    const overlappingBookings = await db_1.db.booking.findMany({
-        where: {
-            roomType: request.roomType,
-            checkInDate: { lt: checkOutDateTime },
-            checkOutDate: { gt: checkInDateTime },
-            OR: [
-                {
-                    paymentStatus: client_1.BookingPaymentStatus.Success,
-                },
-                {
-                    paymentStatus: client_1.BookingPaymentStatus.Pending,
-                    createdAt: {
-                        gt: pendingBookingExpiryTime,
-                    },
-                },
-            ],
-        },
-    });
-    const bookedRoomsCount = overlappingBookings.reduce((sum, booking) => sum + booking.roomCount, 0);
-    const availableRooms = roomInventory.totalRooms - bookedRoomsCount;
-    const isAvailable = availableRooms >= request.roomCount;
-    // Ensure nights calculation handles edge cases (e.g., same day checkout) correctly
     const durationMillis = checkOutDateTime.getTime() - checkInDateTime.getTime();
-    const nights = Math.max(1, Math.ceil(durationMillis / (1000 * 60 * 60 * 24))); // Ensure at least 1 night
-    const totalAmount = isAvailable ? roomInventory.currentRate * request.roomCount * nights : 0;
+    const nights = Math.max(1, Math.ceil(durationMillis / (1000 * 60 * 60 * 24)));
+    const houseState = await computeHouseAvailability(checkInDateTime, checkOutDateTime);
+    if (request.roomType === 'deluxe') {
+        if (!houseState.deluxeAvailable) {
+            return {
+                isAvailable: false,
+                totalAmount: 0,
+                ratePerNight: roomInventory.currentRate,
+                availableRooms: 0,
+                nights,
+                pricingMode: 'package',
+                message: 'Conflict: The home is already booked for the selected dates.',
+            };
+        }
+        return {
+            isAvailable: true,
+            totalAmount: roomInventory.currentRate,
+            ratePerNight: roomInventory.currentRate,
+            availableRooms: houseState.totalRooms,
+            nights,
+            pricingMode: 'package',
+            message: 'Success: The entire home is available for the selected dates.',
+        };
+    }
+    if (!houseState.deluxeAvailable && houseState.standardRoomsAvailable === 0) {
+        return {
+            isAvailable: false,
+            totalAmount: 0,
+            ratePerNight: roomInventory.currentRate,
+            availableRooms: 0,
+            nights,
+            pricingMode: 'nightly',
+            message: 'Conflict: The home is already booked for the selected dates.',
+        };
+    }
+    const allowedStandardRooms = Math.min(houseState.standardRoomsAvailable, roomInventory.totalRooms ?? houseState.standardRoomsAvailable);
+    if (allowedStandardRooms <= 0) {
+        return {
+            isAvailable: false,
+            totalAmount: 0,
+            ratePerNight: roomInventory.currentRate,
+            availableRooms: 0,
+            message: 'Conflict: The home is already booked for the selected dates.',
+        };
+    }
+    if (allowedStandardRooms < request.roomCount) {
+        return {
+            isAvailable: false,
+            totalAmount: 0,
+            ratePerNight: roomInventory.currentRate,
+            availableRooms: allowedStandardRooms,
+            nights,
+            pricingMode: 'nightly',
+            message: allowedStandardRooms > 0
+                ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.`
+                : 'Conflict: The home is already booked for the selected dates.',
+        };
+    }
     return {
-        isAvailable,
-        totalAmount,
+        isAvailable: true,
+        totalAmount: roomInventory.currentRate * request.roomCount * nights,
         ratePerNight: roomInventory.currentRate,
-        message: isAvailable ? `Success: ${availableRooms} room(s) available.` : `Conflict: Only ${availableRooms} room(s) available.`,
+        availableRooms: allowedStandardRooms,
+        nights,
+        pricingMode: 'nightly',
+        message: `Success: ${allowedStandardRooms} room(s) are currently available.`,
     };
 }
-// --- PreBook (Looks OK, uses 'db') ---
+async function getAvailabilityStatus(request) {
+    const checkInTime = request.checkInTime ?? '12:00:00';
+    const checkOutTime = request.checkOutTime ?? '11:00:00';
+    const checkInDateTime = new Date(`${request.checkInDate}T${checkInTime}`);
+    const checkOutDateTime = new Date(`${request.checkOutDate}T${checkOutTime}`);
+    const state = await computeHouseAvailability(checkInDateTime, checkOutDateTime);
+    return {
+        totalRooms: state.totalRooms,
+        occupiedRooms: state.occupiedRooms,
+        standardRoomsAvailable: state.standardRoomsAvailable,
+        deluxeAvailable: state.deluxeAvailable,
+    };
+}
+// --- PreBook ---
 async function preBook(request) {
     const availability = await checkAvailability(request);
     if (!availability.isAvailable) {
-        throw new Error(availability.message || 'Rooms are no longer available for the selected dates.'); // Use message from check
+        throw new Error(availability.message || 'Rooms are no longer available for the selected dates.');
     }
     const roomInventory = await db_1.db.roomInventory.findUniqueOrThrow({ where: { roomType: request.roomType } });
-    // Extract guestInfo separately to avoid spreading potentially undefined userId
     const { guestInfo, userId, ...restOfRequest } = request;
     const booking = await db_1.db.booking.create({
         data: {
-            ...restOfRequest, // Spread validated fields like dates, roomCount etc.
-            guestInfo: guestInfo, // Assign guestInfo object
-            userId: userId, // Assign optional userId
+            ...restOfRequest,
+            guestInfo,
+            userId,
             checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
             checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
-            totalAmount: availability.totalAmount, // Already checked for > 0 in availability
+            totalAmount: availability.totalAmount,
             roomInventoryId: roomInventory.roomId,
             paymentStatus: client_1.BookingPaymentStatus.Pending,
         },
@@ -100,13 +227,10 @@ async function createOrder(request) {
     if (booking.paymentStatus !== client_1.BookingPaymentStatus.Pending) {
         throw new Error('This booking is not pending and cannot create a payment order.');
     }
-    // Type assertion for guestInfo
     const guestInfo = booking.guestInfo;
     if (!guestInfo?.email || !guestInfo?.phone || !guestInfo?.fullName) {
         throw new Error('Booking is missing required guest details (email, phone, name).');
     }
-    // NOTE: Razorpay order creation is now handled in the payment.route.ts
-    // This function validates the booking state before initiating payment
     return {
         bookingId: request.bookingId,
         amount: booking.totalAmount,
@@ -115,31 +239,30 @@ async function createOrder(request) {
         guestEmail: guestInfo.email,
     };
 }
-// --- Webhook Handler Placeholder ---
-// NOTE: Razorpay webhook handling is now done in razorpay.service.ts
-// This placeholder is kept for API route compatibility
-async function handleCashfreeWebhook(rawBody, headers) {
-    console.log("Webhook received. Processing by Razorpay service...");
-    // Razorpay webhooks are handled in payment.route.ts with RazorpayService
-    return { success: true };
-}
-// --- Get Booking by Reference (Looks OK, uses 'db') ---
+// --- Get Booking by Reference ---
 async function getBookingByReference(referenceNumber) {
     return db_1.db.booking.findUnique({
         where: { referenceNumber },
-        select: { referenceNumber: true, checkInDate: true, checkOutDate: true, roomType: true, roomCount: true, totalAmount: true, paymentStatus: true, guestInfo: true }
+        select: {
+            referenceNumber: true,
+            checkInDate: true,
+            checkOutDate: true,
+            roomType: true,
+            roomCount: true,
+            totalAmount: true,
+            paymentStatus: true,
+            guestInfo: true,
+        },
     });
 }
-// --- Admin Services (Looks OK, uses 'db') ---
+// --- Admin Room Inventory ---
 async function getRoomInventory() {
     try {
         return await db_1.db.roomInventory.findMany({ orderBy: { roomType: 'asc' } });
     }
     catch (err) {
-        // If DB doesn't have description column (P2022), fallback to selecting known columns only
         if (err?.code === 'P2022') {
             return db_1.db.roomInventory.findMany({
-                // Select only columns that are guaranteed to exist on older schemas
                 select: { roomId: true, roomType: true, totalRooms: true, currentRate: true, status: true, createdAt: true, updatedAt: true },
                 orderBy: { roomType: 'asc' },
             });
@@ -148,7 +271,6 @@ async function getRoomInventory() {
     }
 }
 async function createRoomType(data) {
-    // Validate required fields server-side to provide clearer errors when client submits malformed data
     if (!data || typeof data.roomType !== 'string' || data.roomType.trim() === '') {
         throw new Error('roomType is required and must be a non-empty string.');
     }
@@ -168,11 +290,9 @@ async function createRoomType(data) {
         payload.description = data.description;
     if (data.imageUrl !== undefined)
         payload.imageUrl = data.imageUrl;
-    // Add check to ensure roomType doesn't already exist?
     return db_1.db.roomInventory.create({ data: payload });
 }
 async function updateRoomType(roomId, data) {
-    // Prevent accidental updates with empty payloads or invalid values
     const updatePayload = {};
     if (data.roomType !== undefined)
         updatePayload.roomType = data.roomType;
@@ -200,14 +320,32 @@ async function deleteRoomType(roomId) {
         data: { status: 'Inactive' },
     });
 }
-// --- Admin Booking Management ---
+// --- Admin Bookings ---
+async function getBookingDetailsAdmin(bookingId) {
+    return db_1.db.booking.findUniqueOrThrow({
+        where: { bookingId },
+        include: {
+            roomInventory: true,
+            user: true,
+        },
+    });
+}
+async function updateBookingStatus(bookingId, status) {
+    const paymentStatus = status;
+    if (!Object.values(client_1.BookingPaymentStatus).includes(paymentStatus)) {
+        throw new Error('Invalid booking status supplied.');
+    }
+    return db_1.db.booking.update({
+        where: { bookingId },
+        data: { paymentStatus, updatedAt: new Date() },
+    });
+}
 async function getAdminBookings(filters) {
     const { status, search, page, limit } = filters;
     const skip = (page - 1) * limit;
     const where = {};
-    if (status && status !== 'All') {
+    if (status && status !== 'All')
         where.paymentStatus = status;
-    }
     if (search) {
         where.OR = [
             { guestInfo: { path: ['fullName'], string_contains: search } },
@@ -224,46 +362,13 @@ async function getAdminBookings(filters) {
         }),
         db_1.db.booking.count({ where }),
     ]);
-    return {
-        data: bookings,
-        total,
-        page,
-        limit,
-        pages: Math.ceil(total / limit),
-    };
+    return { data: bookings, total, page, limit, pages: Math.ceil(total / limit) };
 }
-async function getBookingDetailsAdmin(bookingId) {
-    const booking = await db_1.db.booking.findUnique({
-        where: { bookingId },
-        include: { roomInventory: true, user: true },
-    });
-    if (!booking) {
-        throw new Error('Booking not found');
-    }
-    return booking;
-}
-async function updateBookingStatus(bookingId, status) {
-    // Validate status
-    const validStatuses = ['Pending', 'Success', 'Failed', 'Refunded'];
-    if (!validStatuses.includes(status)) {
-        throw new Error(`Invalid status: ${status}`);
-    }
-    const booking = await db_1.db.booking.update({
-        where: { bookingId },
-        data: { paymentStatus: status, updatedAt: new Date() },
-    });
-    return booking;
-}
-// --- Analytics Services ---
+// --- Analytics ---
 async function getAnalytics(period = 'month') {
     const dateRange = getDateRangeForPeriod(period);
     const bookings = await db_1.db.booking.findMany({
-        where: {
-            createdAt: {
-                gte: dateRange.startDate,
-                lte: dateRange.endDate,
-            },
-        },
+        where: { createdAt: { gte: dateRange.startDate, lte: dateRange.endDate } },
     });
     const successfulBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Success).length;
     const failedBookings = bookings.filter(b => b.paymentStatus === client_1.BookingPaymentStatus.Failed).length;
@@ -279,13 +384,6 @@ async function getAnalytics(period = 'month') {
         pendingBookings,
         refundedBookings,
         totalRevenue,
-        averageRating: 4.5, // Placeholder if ratings implemented
-        bookingsByStatus: {
-            success: successfulBookings,
-            failed: failedBookings,
-            pending: pendingBookings,
-            refunded: refundedBookings,
-        },
     };
 }
 async function getRevenueAnalytics(period = 'month') {
@@ -293,73 +391,46 @@ async function getRevenueAnalytics(period = 'month') {
     const bookings = await db_1.db.booking.findMany({
         where: {
             paymentStatus: client_1.BookingPaymentStatus.Success,
-            createdAt: {
-                gte: dateRange.startDate,
-                lte: dateRange.endDate,
-            },
+            createdAt: { gte: dateRange.startDate, lte: dateRange.endDate },
         },
         orderBy: { createdAt: 'asc' },
     });
-    // Create daily revenue chart data
     const revenueByDate = {};
-    bookings.forEach(booking => {
-        const date = booking.createdAt.toISOString().split('T')[0];
-        revenueByDate[date] = (revenueByDate[date] || 0) + booking.totalAmount;
+    bookings.forEach(b => {
+        const date = b.createdAt.toISOString().split('T')[0];
+        revenueByDate[date] = (revenueByDate[date] || 0) + b.totalAmount;
     });
-    const chartData = Object.entries(revenueByDate).map(([date, revenue]) => ({
-        date,
-        revenue: Math.round(revenue),
-    }));
+    const chartData = Object.entries(revenueByDate).map(([date, revenue]) => ({ date, revenue: Math.round(revenue) }));
     const totalRevenue = bookings.reduce((sum, b) => sum + b.totalAmount, 0);
-    return {
-        totalRevenue,
-        chartData,
-        bookingCount: bookings.length,
-    };
+    return { totalRevenue, chartData, bookingCount: bookings.length };
 }
 async function getOccupancyStats() {
     const rooms = await db_1.db.roomInventory.findMany();
-    const bookings = await db_1.db.booking.findMany({
-        where: {
-            paymentStatus: client_1.BookingPaymentStatus.Success,
-        },
-    });
+    const bookings = await db_1.db.booking.findMany({ where: { paymentStatus: client_1.BookingPaymentStatus.Success } });
     const totalRoomCapacity = rooms.reduce((sum, r) => sum + r.totalRooms, 0);
     const bookedRooms = bookings.reduce((sum, b) => sum + b.roomCount, 0);
     const occupancyRate = totalRoomCapacity > 0 ? (bookedRooms / totalRoomCapacity) * 100 : 0;
     return {
-        occupancyRate: occupancyRate, // ← Return as NUMBER, not string
+        occupancyRate,
         totalCapacity: totalRoomCapacity,
         occupiedRooms: bookedRooms,
         availableRooms: totalRoomCapacity - bookedRooms,
-        data: [
-            { name: 'Occupied', value: Math.round(occupancyRate) },
-            { name: 'Available', value: Math.round(100 - occupancyRate) },
-        ],
     };
 }
 async function getTopRoomTypes() {
-    const bookings = await db_1.db.booking.findMany({
-        where: { paymentStatus: client_1.BookingPaymentStatus.Success },
-    });
+    const bookings = await db_1.db.booking.findMany({ where: { paymentStatus: client_1.BookingPaymentStatus.Success } });
     const roomStats = {};
-    bookings.forEach(booking => {
-        if (!roomStats[booking.roomType]) {
-            roomStats[booking.roomType] = { bookings: 0, revenue: 0 };
-        }
-        roomStats[booking.roomType].bookings += 1;
-        roomStats[booking.roomType].revenue += booking.totalAmount;
+    bookings.forEach(b => {
+        if (!roomStats[b.roomType])
+            roomStats[b.roomType] = { bookings: 0, revenue: 0 };
+        roomStats[b.roomType].bookings += 1;
+        roomStats[b.roomType].revenue += b.totalAmount;
     });
-    const topRooms = Object.entries(roomStats)
-        .map(([roomType, stats]) => ({
-        roomType,
-        ...stats,
-    }))
+    return Object.entries(roomStats)
+        .map(([roomType, stats]) => ({ roomType, ...stats }))
         .sort((a, b) => b.bookings - a.bookings)
         .slice(0, 5);
-    return topRooms;
 }
-// Helper function for date ranges
 function getDateRangeForPeriod(period) {
     const endDate = new Date();
     const startDate = new Date();

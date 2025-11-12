@@ -1,10 +1,11 @@
 import express from 'express';
 import * as BookingService from './booking.service';
 import { validate } from '../../shared/lib/utils/validate.middleware';
-import { 
-    checkAvailabilitySchema, 
-    preBookSchema, 
-    createOrderSchema, 
+import {
+    checkAvailabilitySchema,
+    availabilityStatusSchema,
+    preBookSchema,
+    createOrderSchema,
     createRoomSchema,
     updateRoomSchema
 } from './booking.validation';
@@ -16,6 +17,19 @@ const router = express.Router();
 const razorpayService = new RazorpayService();
 
 // --- Public Routes ---
+
+router.get('/availability/status', validate(availabilityStatusSchema), async (req, res) => {
+    const { checkInDate, checkOutDate, checkInTime, checkOutTime } = req.query as Record<string, string | undefined>;
+
+    const status = await BookingService.getAvailabilityStatus({
+        checkInDate: checkInDate as string,
+        checkOutDate: checkOutDate as string,
+        checkInTime: checkInTime as string | undefined,
+        checkOutTime: checkOutTime as string | undefined,
+    });
+
+    res.status(200).json({ success: true, data: status });
+});
 
 // FR 3.1: Check room availability
 router.post('/check-availability', validate(checkAvailabilitySchema), async (req, res) => {
@@ -73,7 +87,7 @@ router.get('/', async (req, res) => {
   try {
     const bookings = await BookingService.getAllBookings(); // Service call
     res.status(200).json({ success: true, data: bookings });
-  } catch (error) {
+  } catch (error: any) {
     res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: error.message });
   }
 });
