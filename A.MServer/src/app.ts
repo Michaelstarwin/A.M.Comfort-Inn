@@ -42,9 +42,8 @@ console.log('Admin routes mounted:', adminRoutes.stack?.length || 'Router check'
 
 // --- Static Assets ---
 // Serve uploaded files
-if (process.env.NODE_ENV !== 'production') {
-  app.use("/uploads", express.static(path.join(__dirname, "../uploads")));
-}
+const uploadsDir = process.env.UPLOADS_DIR || path.join(__dirname, "../uploads");
+app.use("/uploads", express.static(uploadsDir));
 
 app.get('/_routes', (req,res) => {
   const routes:any[] = [];
