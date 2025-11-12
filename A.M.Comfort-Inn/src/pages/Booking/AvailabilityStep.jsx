@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -26,22 +26,33 @@ export const AvailabilityStep = ({ onSuccess }) => {
     }
   });
 
-  const rooms = [
-    { name: 'Standard Room', dbName: 'standard', description: '1 Private Bedroom, Shared kitchen and Hall.' },
-    { name: 'Deluxe Room', dbName: 'deluxe', description: '2 BHK' }
-  ];
+  const rooms = useMemo(() => ([
+    {
+      name: 'Standard Room',
+      dbName: 'standard',
+      description: 'Private bedroom with access to the shared living area and kitchen.',
+      includedRooms: 1,
+      highlight: 'Ideal for a couple or solo traveller.',
+    },
+    {
+      name: 'Deluxe Room',
+      dbName: 'deluxe',
+      description: 'Entire home with two bedrooms, hall, and kitchen reserved just for you.',
+      includedRooms: 2,
+      highlight: 'Fixed price covers both rooms—only your family stays during the booking window.',
+    },
+  ]), []);
 
   const roomType = watch('roomType');
 
   useEffect(() => {
-    if (roomType === 'Standard Room') {
-      setValue('roomCount', 1);
-    } else if (roomType === 'Deluxe Room') {
-      setValue('roomCount', 2);
-    } else { // When no room type is selected
+    const selectedRoom = rooms.find(r => r.name === roomType);
+    if (selectedRoom) {
+      setValue('roomCount', selectedRoom.includedRooms);
+    } else {
       setValue('roomCount', 0);
     }
-  }, [roomType, setValue]);
+  }, [roomType, rooms, setValue]);
 
   const onSubmit = async (data) => {
     setIsLoading(true);
@@ -95,7 +106,12 @@ export const AvailabilityStep = ({ onSuccess }) => {
           </FormSelect>
           {roomType && (
             <div className="mt-2 p-3 bg-gray-100 rounded-md">
-              <p className="text-sm text-red-500">{rooms.find(r => r.name === roomType)?.description}</p>
+              <p className="text-sm font-semibold text-gray-700">
+                {rooms.find(r => r.name === roomType)?.description}
+              </p>
+              <p className="text-xs text-gray-500 mt-1">
+                {rooms.find(r => r.name === roomType)?.highlight}
+              </p>
             </div>
           )}
         </div>

@@ -1,7 +1,8 @@
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
+import { Booking, BookingPaymentStatus, Prisma } from '@prisma/client';
 import { db } from '../../shared/lib/db';
-import { BookingPaymentStatus, Booking } from '@prisma/client';
+import { sendBookingConfirmationEmail } from '../../shared/lib/utils/sendEmail';
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -82,22 +83,15 @@ export class RazorpayService {
         throw new Error('Booking ID not found in order notes');
       }
 
-      // Update booking status
-      await db.booking.update({
-        where: { bookingId },
-        data: {
-          paymentStatus: BookingPaymentStatus.Success,
-          paymentId,
-          updatedAt: new Date()
-        }
-      });
+      // Update booking status and notify customer
+      const updatedBooking = await markBookingAsPaid(bookingId, paymentId);
 
       const paymentAmount = typeof payment.amount === 'number' ? payment.amount / 100 : 0;
 
       return {
         success: true,
         data: {
-          bookingId,
+          bookingId: updatedBooking.bookingId,
           paymentId,
           amount: paymentAmount,
           status: payment.status
@@ -147,14 +141,7 @@ export class RazorpayService {
       throw new Error('Booking ID not found in order notes');
     }
 
-    await db.booking.update({
-      where: { bookingId },
-      data: {
-        paymentStatus: BookingPaymentStatus.Success,
-        paymentId: payment.id,
-        updatedAt: new Date()
-      }
-    });
+    await markBookingAsPaid(bookingId, payment.id);
   }
 
   private async handlePaymentFailed(payment: any) {
@@ -172,5 +159,76 @@ export class RazorpayService {
         updatedAt: new Date()
       }
     });
+  }
+}
+
+type GuestInfo = {
+  fullName?: string;
+  email?: string;
+  phone?: string;
+  [key: string]: unknown;
+};
+
+async function markBookingAsPaid(bookingId: string, paymentId?: string): Promise<Booking> {
+  const existingBooking = await db.booking.findUnique({ where: { bookingId } });
+  if (!existingBooking) {
+    throw new Error('Booking not found for payment confirmation');
+  }
+
+  if (existingBooking.paymentStatus === BookingPaymentStatus.Success) {
+    if (paymentId && !existingBooking.paymentId) {
+      await db.booking.update({
+        where: { bookingId },
+        data: { paymentId }
+      });
+      existingBooking.paymentId = paymentId;
+    }
+    return existingBooking;
+  }
+
+  const updateData: Prisma.BookingUpdateInput = {
+    paymentStatus: BookingPaymentStatus.Success,
+    updatedAt: new Date()
+  };
+
+  if (paymentId) {
+    updateData.paymentId = paymentId;
+  }
+
+  const updatedBooking = await db.booking.update({
+    where: { bookingId },
+    data: updateData
+  });
+
+  await sendConfirmationEmail(updatedBooking);
+
+  return updatedBooking;
+}
+
+async function sendConfirmationEmail(booking: Booking) {
+  const guestInfo = booking.guestInfo as GuestInfo | null;
+  const recipient = guestInfo?.email;
+
+  if (!recipient) {
+    console.warn(`Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
+    return;
+  }
+
+  const bookingDetails = {
+    bookingId: booking.bookingId,
+    checkInDate: booking.checkInDate.toISOString().split('T')[0],
+    checkInTime: booking.checkInTime,
+    checkOutDate: booking.checkOutDate.toISOString().split('T')[0],
+    checkOutTime: booking.checkOutTime,
+    roomType: booking.roomType,
+    roomCount: booking.roomCount,
+    totalAmount: booking.totalAmount,
+    guestInfo,
+  };
+
+  try {
+    await sendBookingConfirmationEmail(recipient, bookingDetails);
+  } catch (error) {
+    console.error('Booking confirmation email failed:', error);
   }
 }
