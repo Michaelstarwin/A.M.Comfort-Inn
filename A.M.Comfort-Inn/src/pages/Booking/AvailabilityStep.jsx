@@ -9,6 +9,8 @@ import { toast } from 'react-hot-toast';
 const availabilitySchema = z.object({
   roomType: z.string().min(1, 'Please select a room type'),
   roomCount: z.number().int().min(1, 'Must book at least 1 room'),
+  checkInDate: z.string().min(1, 'Check-in date is required'),
+  checkOutDate: z.string().min(1, 'Check-out date is required'),
 });
 
 export const AvailabilityStep = ({ onSuccess }) => {
@@ -18,7 +20,9 @@ export const AvailabilityStep = ({ onSuccess }) => {
     defaultValues: {
       roomCount: 1,
       checkInTime: "12:00:00",
-      checkOutTime: "11:00:00"
+      checkOutTime: "11:00:00",
+      checkInDate: new Date().toISOString().split('T')[0],
+      checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     }
   });
 
@@ -51,10 +55,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
       const requestData = {
         ...data,
         roomType: dbRoomType, // ✅ Use database room name
-        checkInDate: new Date().toISOString().split('T')[0], // Today's date
         checkInTime: "12:00:00", // 12:00 PM
-        checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Tomorrow's date
-        checkOutTime: "23:00:00", // 11:00 PM
+        checkOutTime: "11:00:00", // 11:00 AM
       };
       const response = await bookingApi.checkAvailability(requestData);
       toast.dismiss();
@@ -82,6 +84,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <FormInput label="Check-in Date" name="checkInDate" type="date" register={register} error={errors.checkInDate} />
+        <FormInput label="Check-out Date" name="checkOutDate" type="date" register={register} error={errors.checkOutDate} />
         <div>
           <FormSelect label="Room Type" name="roomType" register={register} error={errors.roomType}>
             <option value="">Select Room Type</option>
