@@ -42,14 +42,19 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
   });
 
   if (!roomInventory || roomInventory.status !== 'Active') {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: 0, message: 'This room type is currently not available.' };
+    return {
+      isAvailable: false,
+      totalAmount: 0,
+      ratePerNight: 0,
+      availableRooms: 0,
+      message: 'This stay option is currently not available.',
+    };
   }
 
   const pendingBookingExpiryTime = new Date(Date.now() - 15 * 60 * 1000);
 
   const overlappingBookings = await db.booking.findMany({
     where: {
-      roomType: request.roomType,
       checkInDate: { lt: checkOutDateTime },
       checkOutDate: { gt: checkInDateTime },
       OR: [
@@ -62,19 +67,21 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
     },
   });
 
-  const bookedRoomsCount = overlappingBookings.reduce((sum, booking) => sum + booking.roomCount, 0);
-  const availableRooms = roomInventory.totalRooms - bookedRoomsCount;
-  const isAvailable = availableRooms >= request.roomCount;
+  const isAvailable = overlappingBookings.length === 0;
+  const availableRooms = isAvailable ? 1 : 0;
 
   const durationMillis = checkOutDateTime.getTime() - checkInDateTime.getTime();
   const nights = Math.max(1, Math.ceil(durationMillis / (1000 * 60 * 60 * 24)));
-  const totalAmount = isAvailable ? roomInventory.currentRate * request.roomCount * nights : 0;
+  const totalAmount = isAvailable ? roomInventory.currentRate * nights : 0;
 
   return {
     isAvailable,
     totalAmount,
     ratePerNight: roomInventory.currentRate,
-    message: isAvailable ? `Success: ${availableRooms} room(s) available.` : `Conflict: Only ${availableRooms} room(s) available.`,
+    availableRooms,
+    message: isAvailable
+      ? 'Success: The home is available for the selected dates.'
+      : 'Conflict: The home is already booked for the selected dates.',
   };
 }
 
