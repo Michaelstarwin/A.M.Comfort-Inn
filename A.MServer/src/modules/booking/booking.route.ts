@@ -101,6 +101,14 @@ router.get('/:referenceNumber', async (req, res) => {
     res.status(200).json({ success: true, data: booking });
 });
 
+router.get('/order/:orderId', async (req, res) => {
+    const booking = await BookingService.getBookingByOrderId(req.params.orderId);
+    if (!booking) {
+        return res.status(404).json({ success: false, message: 'Booking not found.' });
+    }
+    res.status(200).json({ success: true, data: booking });
+});
+
 
 // --- Admin Routes (Protected) ---
 

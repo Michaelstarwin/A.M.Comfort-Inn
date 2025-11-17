@@ -289,6 +289,25 @@ export async function getBookingByReference(referenceNumber: string) {
   });
 }
 
+export async function getBookingByOrderId(orderId: string) {
+  const transaction = await db.transaction.findFirst({
+    where: { razorpayOrderId: orderId },
+  });
+
+  if (!transaction) {
+    return null;
+  }
+
+  return db.booking.findUnique({
+    where: { bookingId: transaction.bookingId },
+    include: {
+      guest: true,
+      room: true,
+      transaction: true,
+    },
+  });
+}
+
 // --- Admin Room Inventory ---
 export async function getRoomInventory() {
   try {

@@ -42,7 +42,7 @@ const Booking = () => {
   const handleGuestSuccess = (data) => {
     setGuestData(data);
     setCurrentStep(3);
-  }; // 3. Called from ReviewStep to initiate the full booking and payment
+  };
 
   const handleConfirmAndPay = async () => {
     setIsLoading(true);
@@ -53,7 +53,6 @@ const Booking = () => {
         throw new Error("Missing booking information. Please fill in all required details.");
       }
 
-      // Combine data from all steps for the preBook call
       const preBookRequest = {
         checkInDate: availabilityData.checkInDate,
         checkInTime: availabilityData.checkInTime,
@@ -69,30 +68,24 @@ const Booking = () => {
         },
       };
 
-      // Create the pending booking
       const preBookResponse = await bookingApi.preBook(preBookRequest);
       if (!preBookResponse.success) {
-        throw new Error(
-          preBookResponse.message || "Failed to create pending booking."
-        );
+        throw new Error(preBookResponse.message || "Failed to create pending booking.");
       }
       const { bookingId } = preBookResponse.data;
       toast.success("Booking record created.");
-      toast.loading("Generating Razorpay payment order...");
 
-      // Create Razorpay order
+      toast.loading("Generating Razorpay payment order...");
       const orderResponse = await bookingApi.createOrder({ bookingId });
       if (!orderResponse.success) {
-        throw new Error(
-          orderResponse.message || "Failed to create payment order."
-        );
+        throw new Error(orderResponse.message || "Failed to create payment order.");
       }
       toast.dismiss();
 
       const { orderId, amount, currency } = orderResponse.data;
-      
+
       if (!window.Razorpay) {
-          throw new Error("Razorpay SDK is not loaded. Please check your internet connection.");
+        throw new Error("Razorpay SDK is not loaded. Please check your internet connection.");
       }
 
       const options = {
@@ -107,7 +100,7 @@ const Booking = () => {
             const verificationResponse = await bookingApi.verifyPayment({
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_order_id: response.razorpay_order_id,
-              razorpay_signature: response.razorpay_signature
+              razorpay_signature: response.razorpay_signature,
             });
 
             if (verificationResponse.success) {
@@ -124,37 +117,22 @@ const Booking = () => {
         prefill: {
           name: guestData.fullName,
           email: guestData.email,
-          contact: guestData.phone
+          contact: guestData.phone,
         },
         theme: {
-          color: "#2563eb"
-        }
+          color: "#2563eb",
+        },
       };
 
-      try {
-        const razorpay = new window.Razorpay(options);
-        
-        razorpay.on('payment.failed', function (response) {
-          console.error('Payment failed:', response.error);
-          toast.error(response.error.description || "Payment failed");
-          setIsLoading(false);
-        });
-
-        // Open Razorpay payment form
-        razorpay.open();
-
-        // Store booking reference
-        localStorage.setItem('lastBookingRef', JSON.stringify({
-          bookingId: orderId,
-          timestamp: Date.now()
-        }));
-
-      } catch (error) {
-        console.error("Payment processing error:", error);
-        toast.dismiss();
+      const razorpay = new window.Razorpay(options);
+      razorpay.on('payment.failed', function (response) {
+        console.error('Payment failed:', response.error);
+        toast.error(response.error.description || "Payment failed");
         setIsLoading(false);
-        throw error;
-      }
+      });
+
+      razorpay.open();
+      localStorage.setItem('lastBookingRef', JSON.stringify({ bookingId: orderId, timestamp: Date.now() }));
     } catch (error) {
       toast.dismiss();
       toast.error(error.message || "An unknown error occurred.");
@@ -167,7 +145,7 @@ const Booking = () => {
       case 1:
         return <AvailabilityStep onSuccess={handleAvailabilitySuccess} />;
       case 2:
-        return <GuestDetailsStep onSuccess={handleGuestSuccess} />;
+        return <GuestDetailsStep onSuccess={handleGuestSuccess} onBack={() => setCurrentStep(1)} />;
       case 3:
         return (
           <ReviewStep

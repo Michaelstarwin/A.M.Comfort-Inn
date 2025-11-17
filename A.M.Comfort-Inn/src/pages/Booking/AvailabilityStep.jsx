@@ -11,6 +11,7 @@ const availabilitySchema = z.object({
   roomCount: z.number().int().min(1, 'Must book at least 1 room'),
   checkInDate: z.string().min(1, 'Check-in date is required'),
   checkOutDate: z.string().min(1, 'Check-out date is required'),
+  mobileNumber: z.string().min(10, 'Please enter a valid mobile number'),
 });
 
 export const AvailabilityStep = ({ onSuccess }) => {
@@ -30,6 +31,7 @@ export const AvailabilityStep = ({ onSuccess }) => {
       checkOutTime: "11:00:00",
       checkInDate: new Date().toISOString().split('T')[0],
       checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      mobileNumber: '',
     }
   });
 
@@ -141,13 +143,48 @@ export const AvailabilityStep = ({ onSuccess }) => {
       return;
     }
 
+    const sendBookingInquiryEmail = async (data, isSuccessful, statusMessage) => {
+      const subject = isSuccessful
+        ? 'Booking Inquiry - Successful'
+        : 'Booking Inquiry - Unsuccessful';
+
+      const message = `
+        Mobile Number: ${data.mobileNumber}
+        Room Type: ${data.roomType}
+        Number of Rooms: ${data.roomCount}
+        Check-in Date: ${data.checkInDate}
+        Check-out Date: ${data.checkOutDate}
+        Availability Status: ${statusMessage}
+      `;
+
+      try {
+        await fetch('https://api.web3forms.com/submit', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            access_key: '6156b3c3-3845-4cdf-b7c0-6644cef08b8f',
+            subject: subject,
+            message: message,
+          }),
+        });
+      } catch (error) {
+        console.error('Error sending booking inquiry email:', error);
+      }
+    };
+
     if (selectedRoom.name === 'Standard Room' && houseStatus.standardRoomsAvailable <= 0) {
-      toast.error('Standard room is fully booked for these dates.');
+      const errorMessage = 'Standard room is fully booked for these dates.';
+      toast.error(errorMessage);
+      await sendBookingInquiryEmail(data, false, errorMessage);
       return;
     }
 
     if (selectedRoom.name === 'Deluxe Room' && !houseStatus.deluxeAvailable) {
-      toast.error('Deluxe stay is unavailable for these dates.');
+      const errorMessage = 'Deluxe stay is unavailable for these dates.';
+      toast.error(errorMessage);
+      await sendBookingInquiryEmail(data, false, errorMessage);
       return;
     }
 
@@ -171,13 +208,18 @@ export const AvailabilityStep = ({ onSuccess }) => {
       toast.dismiss();
 
       if (response.success && response.data.isAvailable) {
+        await sendBookingInquiryEmail(data, true, 'Rooms are available.');
         onSuccess({ ...requestData, ...response.data }); // Pass all data up
       } else {
-        toast.error(response.message || 'Rooms are not available.');
+        const errorMessage = response.message || 'Rooms are not available.';
+        toast.error(errorMessage);
+        await sendBookingInquiryEmail(data, false, errorMessage);
       }
     } catch (error) {
       toast.dismiss();
-      toast.error(error.message || 'Failed to check availability.');
+      const errorMessage = error.message || 'Failed to check availability.';
+      toast.error(errorMessage);
+      await sendBookingInquiryEmail(data, false, errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -257,6 +299,13 @@ export const AvailabilityStep = ({ onSuccess }) => {
               : selectedRoom?.maxRooms
           }
         />
+        <FormInput
+          label="Mobile Number"
+          name="mobileNumber"
+          type="text"
+          register={register}
+          error={errors.mobileNumber}
+        />
       </div>
 
       <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-8 hover:bg-blue-700 transition duration-300 disabled:opacity-50" disabled={isLoading}>
@@ -268,18 +317,17 @@ export const AvailabilityStep = ({ onSuccess }) => {
 
 // Reusable Form Components (can be moved to their own files)
 
-const FormInput = ({ label, name, type, register, error, parseAs, readOnly, disabled, min, max }) => (
+const FormInput = ({ label, name, type, register, error, parseAs, readOnly, disabled, ...rest }) => (
   <div className="w-full">
     <label htmlFor={name} className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
     <input
       id={name}
       type={type}
       {...register(name, { valueAsNumber: parseAs === 'number' })}
-      min={min}
-      max={max}
-      disabled={disabled}
-      className={`block w-full px-3 py-2 border ${error ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${disabled ? 'bg-gray-100 cursor-not-allowed' : ''}`}
       readOnly={readOnly}
+      disabled={disabled}
+      className={`block w-full px-3 py-2 border ${error ? 'border-red-500' : 'border-gray-300'} rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 ${disabled || readOnly ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+      {...rest}
     />
     {error && <p className="text-xs text-red-600 mt-1">{error.message}</p>}
   </div>
