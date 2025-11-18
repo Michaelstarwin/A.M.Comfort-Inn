@@ -1,94 +1,109 @@
+// booking.validation.ts
 import { z } from 'zod';
 
-// A regular expression to validate time in HH:MM:SS format.
+// Validate time in HH:MM:SS
 const timeRegex = /^(?:2[0-3]|[01]?[0-9]):[0-5][0-9]:[0-5][0-9]$/;
 
-// Schema for the 'check-availability' endpoint.
-export const checkAvailabilitySchema = z.object({
-  body: z.object({
-    checkInDate: z.string().date("Invalid check-in date format. Use YYYY-MM-DD."),
-    checkInTime: z.string().regex(timeRegex, "Invalid check-in time format. Use HH:MM:SS."),
-    checkOutDate: z.string().date("Invalid check-out date format. Use YYYY-MM-DD."),
-    checkOutTime: z.string().regex(timeRegex, "Invalid check-out time format. Use HH:MM:SS."),
-    roomType: z.string().min(1, "Room type is required."),
-    roomCount: z.number().int().positive("Room count must be a positive integer."),
-  }).refine(data => `${data.checkInDate}T${data.checkInTime}` < `${data.checkOutDate}T${data.checkOutTime}`, {
-    // This custom validation ensures the check-out time is after the check-in time.
-    message: "Check-out date and time must be after check-in date and time.",
-    path: ["checkOutDate"], // Associates the error with the checkOutDate field.
-  })
+// Simple ISO date string (YYYY-MM-DD)
+const isoDateString = z.string().refine((s) => /^\d{4}-\d{2}-\d{2}$/.test(s), {
+  message: 'Invalid date format. Use YYYY-MM-DD.',
 });
 
-// We infer the TypeScript type from the schema's body for use in our service layer.
+const timeString = z.string().regex(timeRegex, 'Invalid time format. Use HH:MM:SS.');
+
+// helpers
+const toDate = (dateStr: string, timeStr: string) => new Date(`${dateStr}T${timeStr}`);
+
+export const checkAvailabilitySchema = z.object({
+  body: z
+    .object({
+      checkInDate: isoDateString,
+      checkInTime: timeString,
+      checkOutDate: isoDateString,
+      checkOutTime: timeString,
+      roomType: z.string().min(1, 'Room type is required.'),
+      roomCount: z.number().int().positive('Room count must be a positive integer.'),
+    })
+    .superRefine((data, ctx) => {
+      const start = toDate(data.checkInDate, data.checkInTime);
+      const end = toDate(data.checkOutDate, data.checkOutTime);
+      if (!(start < end)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['checkOutDate'],
+          message: 'Check-out date and time must be after check-in date and time.',
+        });
+      }
+    }),
+});
+
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema.shape.body>;
 
 export const availabilityStatusSchema = z.object({
-  query: z.object({
-    checkInDate: z.string().date("Invalid check-in date format. Use YYYY-MM-DD."),
-    checkOutDate: z.string().date("Invalid check-out date format. Use YYYY-MM-DD."),
-    checkInTime: z.string().regex(timeRegex, "Invalid check-in time format. Use HH:MM:SS.").optional(),
-    checkOutTime: z.string().regex(timeRegex, "Invalid check-out time format. Use HH:MM:SS.").optional(),
-  }).refine(
-    data => `${data.checkInDate}T${data.checkInTime ?? '12:00:00'}` < `${data.checkOutDate}T${data.checkOutTime ?? '11:00:00'}`,
-    {
-      message: "Check-out date and time must be after check-in date and time.",
-      path: ["checkOutDate"],
-    }
-  ),
+  query: z
+    .object({
+      checkInDate: isoDateString,
+      checkOutDate: isoDateString,
+      checkInTime: timeString.optional(),
+      checkOutTime: timeString.optional(),
+    })
+    .superRefine((data, ctx) => {
+      const inTime = data.checkInTime ?? '12:00:00';
+      const outTime = data.checkOutTime ?? '11:00:00';
+      const start = toDate(data.checkInDate, inTime);
+      const end = toDate(data.checkOutDate, outTime);
+      if (!(start < end)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['checkOutDate'],
+          message: 'Check-out date and time must be after check-in date and time.',
+        });
+      }
+    }),
 });
 
 export type AvailabilityStatusRequest = z.infer<typeof availabilityStatusSchema.shape.query>;
 
-
-// Schema for the 'pre-book' endpoint.
+// Pre-book: extend the validated body with guest and optional userId
 export const preBookSchema = z.object({
-    // UPDATE: Changed .extend() to .safeExtend() to handle the refinement in the base schema.
-    body: checkAvailabilitySchema.shape.body.safeExtend({
-        guestInfo: z.object({
-            fullName: z.string().min(2, "Full name is required."),
-            email: z.string().email("Invalid email address."),
-            phone: z.string().min(10, "A valid phone number is required."),
-            country: z.string().min(2, "Country is required."),
-        }),
-        userId: z.string().cuid("Invalid user ID format.").optional(),
-    })
+  body: checkAvailabilitySchema.shape.body.extend({
+    guestInfo: z.object({
+      fullName: z.string().min(2, 'Full name is required.'),
+      email: z.string().email('Invalid email address.'),
+      phone: z.string().min(10, 'A valid phone number is required.'),
+      country: z.string().min(2, 'Country is required.'),
+    }),
+    userId: z.string().cuid().optional(),
+  }),
 });
 
-// Infer the TypeScript type for the pre-book request.
 export type PreBookRequest = z.infer<typeof preBookSchema.shape.body>;
 
-
-// Schema for creating a payment order.
 export const createOrderSchema = z.object({
   body: z.object({
-    bookingId: z.string().cuid("A valid booking ID is required."),
+    bookingId: z.string().cuid('A valid booking ID is required.'),
   }),
 });
 
 export type CreateOrderRequest = z.infer<typeof createOrderSchema.shape.body>;
 
-
-// Schema for an admin creating a new room type.
 export const createRoomSchema = z.object({
   body: z.object({
-    roomType: z.string().min(3, "Room type must be at least 3 characters long."),
-    totalRooms: z.number().int().positive("Total rooms must be a positive number."),
-    currentRate: z.number().positive("Current rate must be a positive number."),
+    roomType: z.string().min(3, 'Room type must be at least 3 characters long.'),
+    totalRooms: z.number().int().positive('Total rooms must be a positive number.'),
+    currentRate: z.number().positive('Current rate must be a positive number.'),
   }),
 });
 
 export type CreateRoomRequest = z.infer<typeof createRoomSchema.shape.body>;
 
-
-// Schema for an admin updating an existing room type.
 export const updateRoomSchema = z.object({
   body: z.object({
-    roomType: z.string().min(3, "Room type must be at least 3 characters long.").optional(),
-    totalRooms: z.number().int().positive("Total rooms must be a positive number.").optional(),
-    currentRate: z.number().positive("Current rate must be a positive number.").optional(),
+    roomType: z.string().min(3).optional(),
+    totalRooms: z.number().int().positive().optional(),
+    currentRate: z.number().positive().optional(),
     status: z.enum(['Active', 'Inactive']).optional(),
   }),
 });
 
 export type UpdateRoomRequest = z.infer<typeof updateRoomSchema.shape.body>;
-
