@@ -7,7 +7,7 @@ import cors from "cors";
 import bookingRoutes from "./modules/booking/booking.route";
 import transactionRoutes from "./modules/transaction/transaction.route";
 import adminRoutes from "./modules/admin/admin.route";
-
+import paymentRoutes from "./modules/payment/payment.route"
 // For async error handling
 import "express-async-errors";
 
@@ -69,6 +69,7 @@ app.get("/api/admin/test", (req, res) => {
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/admin", adminRoutes);
+app.use('/api/payment', paymentRoutes);
 
 console.log("Admin routes mounted:", (adminRoutes as any).stack?.length || "Router check");
 
