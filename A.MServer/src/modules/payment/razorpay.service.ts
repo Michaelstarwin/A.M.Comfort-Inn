@@ -1,47 +1,70 @@
+// razorpay.service.ts (replace or adapt)
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { Booking, BookingPaymentStatus, Prisma } from '@prisma/client';
 import { db } from '../../shared/lib/db';
 import { sendBookingConfirmationEmail } from '../../shared/lib/utils/sendEmail';
 
-// Initialize Razorpay
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID!,
-  key_secret: process.env.RAZORPAY_KEY_SECRET!
-});
-
 export interface CreateOrderRequest {
   bookingId: string;
   amount: number;
-  currency: string;
+  currency?: string;
   notes?: Record<string, string>;
 }
 
 export class RazorpayService {
+  private razorpay: Razorpay | null = null;
+  private keySecret: string | undefined;
+
+  constructor() {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    this.keySecret = keySecret;
+
+    if (!keyId || !keySecret) {
+      console.error('Razorpay credentials missing. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in env.');
+      // Keep razorpay null so any call will return a clear error instead of making malformed requests.
+      this.razorpay = null;
+    } else {
+      this.razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
+    }
+  }
+
+  private ensureClient() {
+    if (!this.razorpay) {
+      throw new Error('Payment gateway not configured on server.');
+    }
+    return this.razorpay;
+  }
+
   async createOrder(request: CreateOrderRequest) {
     try {
       const { bookingId, amount, currency = 'INR', notes = {} } = request;
 
-      // Create Razorpay order
-      const order = await razorpay.orders.create({
-        amount: Math.round(amount * 100), // Convert to smallest currency unit (paise)
+      const razor = this.ensureClient();
+
+      const order = await razor.orders.create({
+        amount: Math.round(amount * 100), // paise
         currency,
         receipt: `booking_${bookingId}`,
-        notes: {
-          bookingId,
-          ...notes
-        },
-        payment_capture: true // Auto capture payment
-      });
+        notes: { bookingId, ...notes },
+        payment_capture: true
+      }) as any;
 
-      // Update booking with order details
-      await db.booking.update({
-        where: { bookingId: bookingId },
-        data: {
-          paymentOrderId: order.id,
-          paymentStatus: BookingPaymentStatus.Pending,
-        }
-      });
+      try {
+        await db.booking.update({
+          where: { bookingId },
+          data: {
+            paymentOrderId: order.id,
+            paymentStatus: BookingPaymentStatus.Pending,
+            updatedAt: new Date()
+          }
+        });
+      } catch (dbErr: any) {
+        console.error('DB update after order creation failed:', dbErr);
+        // Decide: attempt to cleanup or return partial success. Here we surface error to caller.
+        return { success: false, message: 'Failed to link order with booking', error: dbErr.message };
+      }
 
       return {
         success: true,
@@ -52,15 +75,18 @@ export class RazorpayService {
           receipt: order.receipt
         }
       };
-    } catch (error: any) {
-      console.error('Razorpay order creation failed:', error);
-      throw new Error(error.message || 'Failed to create payment order');
+    } catch (err: any) {
+      console.error('Razorpay order creation failed:', err);
+      // Return structured error rather than throwing raw error
+      return { success: false, message: err.message || 'Failed to create payment order', detail: err };
     }
   }
 
   async verifyPayment(paymentId: string, orderId: string, signature: string) {
+    if (!this.keySecret) throw new Error('Razorpay secret not configured');
+
     const generatedSignature = crypto
-      .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+      .createHmac('sha256', this.keySecret)
       .update(`${orderId}|${paymentId}`)
       .digest('hex');
 
@@ -69,21 +95,19 @@ export class RazorpayService {
     }
 
     try {
-      // Verify payment details with Razorpay
-      const payment = await razorpay.payments.fetch(paymentId);
-      
+      const razor = this.ensureClient();
+      const payment = await razor.payments.fetch(paymentId);
+
       if (payment.status !== 'captured') {
         throw new Error('Payment not captured');
       }
 
-      // Get booking ID from order notes
-      const order = await razorpay.orders.fetch(orderId);
+      const order = await razor.orders.fetch(orderId);
       const bookingId = order.notes?.bookingId as string | undefined;
       if (!bookingId) {
         throw new Error('Booking ID not found in order notes');
       }
 
-      // Update booking status and notify customer
       const updatedBooking = await markBookingAsPaid(bookingId, paymentId);
 
       const paymentAmount = typeof payment.amount === 'number' ? payment.amount / 100 : 0;
@@ -97,24 +121,30 @@ export class RazorpayService {
           status: payment.status
         }
       };
-    } catch (error: any) {
-      console.error('Payment verification failed:', error);
-      throw new Error(error.message || 'Payment verification failed');
+    } catch (err: any) {
+      console.error('Payment verification failed:', err);
+      throw new Error(err.message || 'Payment verification failed');
     }
   }
 
-  async handleWebhook(payload: any, signature: string) {
+  /**
+   * handleWebhook expects rawBodyString (exact JSON string used by Razorpay to sign).
+   * If you supply a Buffer or object, ensure you pass JSON.stringify(originalObject) or buffer.toString()
+   */
+  async handleWebhook(rawBodyString: string, signature: string) {
+    if (!this.keySecret) throw new Error('Razorpay webhook secret not configured');
+
     try {
-      // Verify webhook signature
       const expectedSignature = crypto
         .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!)
-        .update(JSON.stringify(payload))
+        .update(rawBodyString)
         .digest('hex');
 
       if (expectedSignature !== signature) {
         throw new Error('Invalid webhook signature');
       }
 
+      const payload = JSON.parse(rawBodyString);
       const { event, payload: eventPayload } = payload;
 
       switch (event) {
@@ -124,32 +154,30 @@ export class RazorpayService {
         case 'payment.failed':
           await this.handlePaymentFailed(eventPayload.payment.entity);
           break;
-        // Add more event handlers as needed
+        default:
+          console.log('Unhandled webhook event:', event);
       }
 
       return { success: true };
-    } catch (error: any) {
-      console.error('Webhook processing failed:', error);
-      throw new Error(error.message || 'Webhook processing failed');
+    } catch (err: any) {
+      console.error('Webhook processing failed:', err);
+      throw new Error(err.message || 'Webhook processing failed');
     }
   }
 
   private async handlePaymentCaptured(payment: any) {
-    const order = await razorpay.orders.fetch(payment.order_id);
+    const razor = this.ensureClient();
+    const order = await razor.orders.fetch(payment.order_id);
     const bookingId = order.notes?.bookingId as string | undefined;
-    if (!bookingId) {
-      throw new Error('Booking ID not found in order notes');
-    }
-
+    if (!bookingId) throw new Error('Booking ID not found in order notes');
     await markBookingAsPaid(bookingId, payment.id);
   }
 
   private async handlePaymentFailed(payment: any) {
-    const order = await razorpay.orders.fetch(payment.order_id);
+    const razor = this.ensureClient();
+    const order = await razor.orders.fetch(payment.order_id);
     const bookingId = order.notes?.bookingId as string | undefined;
-    if (!bookingId) {
-      throw new Error('Booking ID not found in order notes');
-    }
+    if (!bookingId) throw new Error('Booking ID not found in order notes');
 
     await db.booking.update({
       where: { bookingId },
@@ -162,6 +190,7 @@ export class RazorpayService {
   }
 }
 
+// helpers (same as your implementation; keep as-is)
 type GuestInfo = {
   fullName?: string;
   email?: string;

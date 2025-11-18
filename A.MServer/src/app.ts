@@ -19,7 +19,33 @@ const port = Number(process.env.PORT) || 7700;
 
 // --- Core Middleware ---
 // Enable CORS with default options
-app.use(cors());
+const allowedOrigins = [
+  'https://www.amcinn.in',
+  'http://localhost:3000'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // allow requests with no origin (e.g., server-to-server, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      return callback(null, true);
+    }
+    return callback(new Error('Not allowed by CORS'));
+  },
+  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  credentials: true,
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  maxAge: 600
+}));
+
+app.options('*', (req, res) => res.sendStatus(204));
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    status: 'error',
+    message: 'Route not found'
+  });
+});
 // Parse JSON bodies
 app.use(express.json());
 // Parse URL-encoded bodies
@@ -69,23 +95,36 @@ app.get("/", (req: Request, res: Response) => {
 
 // --- Global Error Handler ---
 // Must be the last middleware
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-    console.error(err.stack); // Log the error stack for debugging
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+  console.error('Unhandled error:', err && (err.stack || err));
 
-    // Handle known error types, e.g., validation errors
-    if (err.name === 'ZodError') {
-        return res.status(400).json({
-            status: 'error',
-            message: 'Invalid input data',
-            errors: JSON.parse(err.message)
-        });
-    }
+  // If the error explicitly set a status, use it
+  const status = err.status || err.statusCode || 500;
+  const response = {
+    status: 'error',
+    message: err.message || 'An unexpected error occurred',
+  };
 
-    // Generic fallback error
-    res.status(500).json({
-        status: 'error',
-        message: err.message || "An unexpected error occurred."
+  // include validation details if present (optional)
+  if (err.name === 'ZodError' || err.type === 'validation') {
+    return res.status(400).json({
+      status: 'error',
+      message: 'Invalid input data',
+      errors: err.errors || err.message
     });
+  }
+
+  return res.status(status).json(response);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection at:', reason);
+  // Recommendation: consider exiting process after graceful shutdown in production
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Recommendation: exit and restart the process in production (Graceful restart pattern).
+  // For debugging/development, we log and keep process alive to inspect.
 });
 
 
