@@ -51,18 +51,20 @@ router.post('/check-availability', validate(checkAvailabilitySchema), async (req
 router.post('/pre-book', validate(preBookSchema), async (req, res) => {
     try {
       const result = await BookingService.preBook(req.body);
-  
-      // result now can be { success: true, bookingId, totalAmount } OR { success: false, ... }
-      if (!result || (result as any).success === false) {
-        const message = (result && (result as any).message) || 'No availability';
-        return res.status(409).json({ success: false, message, data: result });
-      }
-  
-      return res.status(201).json({
-        success: true,
-        message: 'Booking initiated. Please proceed to payment.',
-        data: result
-      });
+
+if (!result.success) {
+  return res.status(409).json({
+    success: false,
+    message: result.message
+  });
+}
+
+return res.status(201).json({
+  success: true,
+  message: 'Booking initiated. Please proceed to payment.',
+    data: result
+});
+
     } catch (err: any) {
       console.error('Pre-book error:', err);
       return res.status(500).json({ success: false, message: 'Failed to create pre-booking' });
