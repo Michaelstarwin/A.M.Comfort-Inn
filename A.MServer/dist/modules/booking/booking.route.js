@@ -47,14 +47,21 @@ const router = express_1.default.Router();
 const razorpayService = new razorpay_service_1.RazorpayService();
 // --- Public Routes ---
 router.get('/availability/status', (0, validate_middleware_1.validate)(booking_validation_1.availabilityStatusSchema), async (req, res) => {
+    // safe to assert non-null because validate(...) ensures these exist
     const { checkInDate, checkOutDate, checkInTime, checkOutTime } = req.query;
-    const status = await BookingService.getAvailabilityStatus({
-        checkInDate: checkInDate,
-        checkOutDate: checkOutDate,
-        checkInTime: checkInTime,
-        checkOutTime: checkOutTime,
-    });
-    res.status(200).json({ success: true, data: status });
+    try {
+        const status = await BookingService.getAvailabilityStatus({
+            checkInDate: checkInDate, // non-null assertion — validated by zod
+            checkOutDate: checkOutDate, // non-null assertion — validated by zod
+            checkInTime: checkInTime, // optional
+            checkOutTime: checkOutTime, // optional
+        });
+        return res.status(200).json({ success: true, data: status });
+    }
+    catch (err) {
+        console.error('Availability status error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to get availability status' });
+    }
 });
 // FR 3.1: Check room availability
 router.post('/check-availability', (0, validate_middleware_1.validate)(booking_validation_1.checkAvailabilitySchema), async (req, res) => {
@@ -66,15 +73,35 @@ router.post('/check-availability', (0, validate_middleware_1.validate)(booking_v
 });
 // FR 3.2: Guest Information and Pre-Booking
 router.post('/pre-book', (0, validate_middleware_1.validate)(booking_validation_1.preBookSchema), async (req, res) => {
-    const result = await BookingService.preBook(req.body);
-    res.status(201).json({ success: true, message: 'Booking initiated. Please proceed to payment.', data: result });
+    try {
+        const result = await BookingService.preBook(req.body);
+        if (!result.success) {
+            return res.status(409).json({
+                success: false,
+                message: result.message
+            });
+        }
+        return res.status(201).json({
+            success: true,
+            message: 'Booking initiated. Please proceed to payment.',
+            data: result
+        });
+    }
+    catch (err) {
+        console.error('Pre-book error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to create pre-booking' });
+    }
 });
 // FR 3.3: Razorpay Payment Gateway Integration
 router.post('/payment/create-order', (0, validate_middleware_1.validate)(booking_validation_1.createOrderSchema), async (req, res) => {
     try {
-        // First validate the booking
+        // bookingData might be { success: true, ... } or { success: false, ... }
         const bookingData = await BookingService.createOrder(req.body);
-        // Create Razorpay order
+        if (!bookingData || bookingData.success === false) {
+            // pass through error message from service
+            return res.status(400).json({ success: false, message: bookingData?.message || 'Invalid booking for payment' });
+        }
+        // Create Razorpay order (payment service returns structured result)
         const result = await razorpayService.createOrder({
             bookingId: bookingData.bookingId,
             amount: bookingData.amount,
@@ -84,10 +111,23 @@ router.post('/payment/create-order', (0, validate_middleware_1.validate)(booking
                 guestEmail: bookingData.guestEmail
             }
         });
-        res.status(200).json({ success: true, message: 'Payment order created.', data: result.data });
+        if (!result || result.success === false || !result.data) {
+            return res.status(400).json({ success: false, message: result?.message || 'Failed to create payment order', detail: result });
+        }
+        // update booking with order id (do DB update here or inside razorpayService)
+        try {
+            await BookingService.linkOrderToBooking(bookingData.bookingId, result.data.orderId);
+        }
+        catch (dbErr) {
+            // handle unique constraint gracefully if needed
+            console.error('Failed to link order to booking:', dbErr);
+            // still return order info (or decide to rollback)
+        }
+        return res.status(200).json({ success: true, message: 'Payment order created.', data: result.data });
     }
     catch (error) {
-        res.status(400).json({ success: false, message: error.message });
+        console.error('Create-order route error:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
     }
 });
 // FR 3.4: Payment Confirmation via Razorpay Webhook
@@ -115,11 +155,28 @@ router.get('/', async (req, res) => {
 });
 // Get final booking details by reference number
 router.get('/:referenceNumber', async (req, res) => {
-    const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
-    if (!booking) {
-        return res.status(404).json({ success: false, message: 'Booking not found.' });
+    try {
+        const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
+        if (!booking)
+            return res.status(404).json({ success: false, message: 'Booking not found.' });
+        return res.status(200).json({ success: true, data: booking });
     }
-    res.status(200).json({ success: true, data: booking });
+    catch (err) {
+        console.error('Get booking by reference error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to retrieve booking' });
+    }
+});
+router.get('/order/:orderId', async (req, res) => {
+    try {
+        const booking = await BookingService.getBookingByOrderId(req.params.orderId);
+        if (!booking)
+            return res.status(404).json({ success: false, message: 'Booking not found.' });
+        return res.status(200).json({ success: true, data: booking });
+    }
+    catch (err) {
+        console.error('Get booking by orderId error:', err);
+        return res.status(500).json({ success: false, message: 'Failed to retrieve booking' });
+    }
 });
 // --- Admin Routes (Protected) ---
 // FR 3.6: Get all room types and their rates
