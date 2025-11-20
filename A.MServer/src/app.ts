@@ -21,7 +21,8 @@ const port = Number(process.env.PORT) || 7700;
 // CORS
 const allowedOrigins = [
   "https://www.amcinn.in",
-  "http://localhost:3000",
+  "http://localhost:5173",  // Vite dev server
+  "http://127.0.0.1:5173",  // Alternative localhost
 ];
 
 app.use(cors({
