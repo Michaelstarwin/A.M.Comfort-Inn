@@ -129,6 +129,7 @@ export const bookingApi = {
   verifyPayment: (data) => apiClient.post('/payment/verify', data),
   getAvailabilityStatus: (params) => apiClient.get('/bookings/availability/status', { params }),
   getBooking: (referenceNumber) => apiClient.get(`/bookings/${referenceNumber}`),
+  getBookingByOrderId: (orderId) => apiClient.get(`/bookings/order/${orderId}`),
   getAllBookings: (filters) => apiClient.get('/bookings/admin/all', { params: filters }),
   updateBookingStatus: (bookingId, status) => apiClient.put(`/bookings/${bookingId}/status`, { status }),
 };
