@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { bookingApi } from '../../utils/api';
 import { toast } from 'react-hot-toast';
-import { FaPrint, FaCheckCircle, FaTimesCircle } from 'react-icons/fa';
+import { FaPrint, FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 const DetailItem = ({ label, value }) => (
   <div className="flex justify-between py-2 border-b border-gray-200">
@@ -13,17 +13,21 @@ const DetailItem = ({ label, value }) => (
 
 export const PaymentStatus = () => {
   const navigate = useNavigate();
-  const { orderId } = useParams();
+  const [searchParams] = useSearchParams();
+  const orderId = searchParams.get('orderId');
+  const status = searchParams.get('status');
+  const reason = searchParams.get('reason');
+  
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState(status || 'pending');
   const ticketRef = useRef(null);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
       if (!orderId) {
         setIsLoading(false);
-        setIsError(true);
+        setPaymentStatus('error');
         toast.error('Booking reference not found.');
         return;
       }
@@ -32,18 +36,37 @@ export const PaymentStatus = () => {
         const response = await bookingApi.getBookingByOrderId(orderId);
         if (response.success && response.data) {
           setBooking(response.data);
-          if (response.data.paymentStatus === 'SUCCESS') {
-            toast.success('Thank you for your payment! Your booking is confirmed.');
+          
+          // If status from URL is success, show success message
+          if (status === 'success') {
+            setPaymentStatus('success');
+            toast.success('✅ Payment successful! Your booking is confirmed.', {
+              duration: 3000,
+            });
+          } else if (status === 'failed') {
+            setPaymentStatus('failed');
+            toast.error(`❌ Payment failed. ${reason || 'Please try again.'}`, {
+              duration: 4000,
+            });
           } else {
-            setIsError(true);
-            toast.error('Payment was not successful. Please try again.');
+            // Check booking payment status from API
+            const bookingStatus = response.data.paymentStatus?.toLowerCase();
+            if (bookingStatus === 'success') {
+              setPaymentStatus('success');
+              toast.success('Booking confirmed!');
+            } else if (bookingStatus === 'failed') {
+              setPaymentStatus('failed');
+              toast.error('Payment was not successful.');
+            } else {
+              setPaymentStatus('pending');
+            }
           }
         } else {
           throw new Error(response.message || 'Failed to retrieve booking details.');
         }
       } catch (error) {
         console.error('Error fetching booking details:', error);
-        setIsError(true);
+        setPaymentStatus('error');
         toast.error(error.message || 'Could not find booking details.');
       } finally {
         setIsLoading(false);
@@ -51,7 +74,7 @@ export const PaymentStatus = () => {
     };
 
     fetchBookingDetails();
-  }, [orderId]);
+  }, [orderId, status, reason]);
 
   const handlePrint = () => {
     const printContents = ticketRef.current.innerHTML;
@@ -65,30 +88,42 @@ export const PaymentStatus = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20">
-        <p>Loading booking details...</p>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 text-lg">Loading booking details...</p>
+        </div>
       </div>
     );
   }
 
-  if (isError || !booking || booking.paymentStatus !== 'SUCCESS') {
+  // Payment Failed State
+  if (paymentStatus === 'failed') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20">
-        <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-lg text-center">
-          <FaTimesCircle className="text-red-500 text-6xl mb-4 mx-auto" />
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
+        <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
+          <FaTimesCircle className="text-red-500 text-6xl mb-4 mx-auto animate-pulse" />
           <h2 className="text-2xl font-bold mb-4 text-red-700">Payment Failed</h2>
-          <p className="text-gray-600 mb-6">
-            There was an issue with your payment. Please try again or contact support if the problem persists.
+          <p className="text-gray-600 mb-2">
+            Unfortunately, your payment could not be processed.
           </p>
-          <div className="space-y-4">
+          {reason && (
+            <p className="text-sm text-gray-500 mb-6 italic">
+              Reason: {decodeURIComponent(reason)}
+            </p>
+          )}
+          <p className="text-gray-600 mb-6">
+            Please try again or contact support if the problem persists.
+          </p>
+          <div className="space-y-3">
             <button
               onClick={() => navigate('/booking')}
-              className="w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-300"
             >
               Try Again
             </button>
             <button
               onClick={() => navigate('/')}
-              className="w-full bg-gray-300 text-gray-800 py-2 px-4 rounded hover:bg-gray-400"
+              className="w-full bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-300"
             >
               Back to Home
             </button>
@@ -98,53 +133,105 @@ export const PaymentStatus = () => {
     );
   }
 
+  // Error State (no booking found)
+  if (paymentStatus === 'error' || !booking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
+        <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
+          <FaExclamationTriangle className="text-yellow-500 text-6xl mb-4 mx-auto" />
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Booking Not Found</h2>
+          <p className="text-gray-600 mb-6">
+            We couldn't find your booking details. Please check your email for confirmation or contact support.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => navigate('/booking')}
+              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-300"
+            >
+              Make a New Booking
+            </button>
+            <button
+              onClick={() => navigate('/')}
+              className="w-full bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-300"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Success State - Show Booking Confirmation
   return (
     <div className="min-h-screen bg-gray-100 pt-28 pb-12 px-4">
       <div className="max-w-2xl mx-auto">
         <div className="text-center mb-8">
-          <FaCheckCircle className="text-green-500 text-6xl mb-4 mx-auto" />
-          <h1 className="text-3xl font-bold text-gray-800">Booking Confirmed!</h1>
-          <p className="text-gray-600">Your ticket is ready to be viewed or printed.</p>
+          <FaCheckCircle className="text-green-500 text-6xl mb-4 mx-auto animate-bounce" />
+          <h1 className="text-3xl font-bold text-gray-800 mb-2">✨ Booking Confirmed! ✨</h1>
+          <p className="text-gray-600">Thank you for choosing A.M. Comfort Inn</p>
+          <p className="text-sm text-gray-500 mt-2">A confirmation email has been sent to your inbox</p>
         </div>
 
         <div ref={ticketRef} className="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
-          <div className="flex justify-between items-center pb-4 border-b-2 border-dashed">
+          <div className="flex justify-between items-center pb-4 border-b-2 border-dashed border-gray-300">
             <h2 className="text-2xl font-bold text-blue-600">A.M. Comfort Inn</h2>
-            <span className="text-sm font-semibold text-gray-700">Booking Ticket</span>
+            <span className="text-sm font-semibold text-gray-700 bg-green-100 px-3 py-1 rounded-full">Confirmed</span>
           </div>
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Details</h3>
-            <DetailItem label="Booking ID" value={booking.bookingId} />
-            <DetailItem label="Check-in" value={`${new Date(booking.checkInDate).toLocaleDateString()} @ 12:00 PM`} />
-            <DetailItem label="Check-out" value={`${new Date(booking.checkOutDate).toLocaleDateString()} @ 11:00 AM`} />
-            <DetailItem label="Room Type" value={booking.room.roomType} />
-            <DetailItem label="Rooms Reserved" value={booking.roomCount} />
-            <div className="flex justify-between py-3 mt-2">
+            <DetailItem label="Booking ID" value={booking.bookingId || 'N/A'} />
+            <DetailItem 
+              label="Check-in" 
+              value={`${new Date(booking.checkInDate).toLocaleDateString('en-IN', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })} @ ${booking.checkInTime || '12:00 PM'}`} 
+            />
+            <DetailItem 
+              label="Check-out" 
+              value={`${new Date(booking.checkOutDate).toLocaleDateString('en-IN', { 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })} @ ${booking.checkOutTime || '11:00 AM'}`} 
+            />
+            <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
+            <DetailItem label="Rooms Reserved" value={booking.roomCount || 1} />
+            <div className="flex justify-between py-3 mt-2 bg-green-50 px-3 rounded-lg">
               <span className="text-lg font-bold text-gray-900">Total Amount Paid</span>
-              <span className="text-lg font-bold text-blue-600">₹{booking.transaction.amount.toLocaleString()}</span>
+              <span className="text-lg font-bold text-green-600">₹{(booking.totalAmount || 0).toLocaleString('en-IN')}</span>
             </div>
           </div>
           <div className="mt-6 border-t pt-4">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Guest Information</h3>
-            <DetailItem label="Full Name" value={booking.guest.fullName} />
-            <DetailItem label="Email" value={booking.guest.email} />
-            <DetailItem label="Phone" value={booking.guest.phone} />
+            <DetailItem label="Full Name" value={booking.guestInfo?.fullName || 'N/A'} />
+            <DetailItem label="Email" value={booking.guestInfo?.email || 'N/A'} />
+            <DetailItem label="Phone" value={booking.guestInfo?.phone || 'N/A'} />
+          </div>
+          
+          <div className="mt-6 border-t pt-4 bg-blue-50 p-4 rounded-lg">
+            <p className="text-sm text-gray-700">
+              <strong>Important:</strong> Please arrive at the check-in time. For any queries or changes, 
+              please contact us at <span className="font-semibold">booking.amcinn@gmail.com</span>
+            </p>
           </div>
         </div>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             onClick={handlePrint}
-            className="w-full flex items-center justify-center gap-2 bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition duration-300"
+            className="w-full flex items-center justify-center gap-2 bg-gray-700 text-white font-bold py-3 px-4 rounded-lg hover:bg-gray-800 transition duration-300 shadow-md"
           >
             <FaPrint />
             Print Ticket
           </button>
           <button
             onClick={() => navigate('/')}
-            className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300"
+            className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 shadow-md"
           >
-            Done
+            Back to Home
           </button>
         </div>
       </div>

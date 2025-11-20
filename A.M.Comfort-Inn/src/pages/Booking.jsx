@@ -73,9 +73,10 @@ const Booking = () => {
         throw new Error(preBookResponse.message || "Failed to create pending booking.");
       }
       const { bookingId } = preBookResponse.data;
+      toast.dismiss();
       toast.success("Booking record created.");
 
-      toast.loading("Generating Razorpay payment order...");
+      toast.loading("Generating payment order...");
       const orderResponse = await bookingApi.createOrder({ bookingId });
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || "Failed to create payment order.");
@@ -96,6 +97,7 @@ const Booking = () => {
         description: "Room Booking Payment",
         order_id: orderId,
         handler: async function (response) {
+          toast.loading("Verifying payment...");
           try {
             const verificationResponse = await bookingApi.verifyPayment({
               razorpay_payment_id: response.razorpay_payment_id,
@@ -103,15 +105,31 @@ const Booking = () => {
               razorpay_signature: response.razorpay_signature,
             });
 
+            toast.dismiss();
             if (verificationResponse.success) {
-              toast.success("Payment successful!");
-              navigate(`/booking/status/${orderId}`);
+              toast.success("🎉 Payment Successful! Your booking is confirmed.", {
+                duration: 4000,
+                icon: '✅',
+              });
+              setIsLoading(false);
+              // Navigate to payment status page
+              setTimeout(() => {
+                navigate(`/booking/payment-status?orderId=${orderId}&status=success`);
+              }, 1500);
             } else {
               throw new Error("Payment verification failed");
             }
           } catch (error) {
             console.error("Payment verification failed:", error);
-            toast.error("Payment verification failed. Please contact support.");
+            toast.dismiss();
+            toast.error("❌ Payment verification failed. Please contact support.", {
+              duration: 5000,
+            });
+            setIsLoading(false);
+            // Navigate to failure page
+            setTimeout(() => {
+              navigate(`/booking/payment-status?orderId=${orderId}&status=failed`);
+            }, 2000);
           }
         },
         prefill: {
@@ -122,13 +140,27 @@ const Booking = () => {
         theme: {
           color: "#2563eb",
         },
+        modal: {
+          ondismiss: function() {
+            toast.dismiss();
+            toast.error("Payment cancelled. You can try again when ready.");
+            setIsLoading(false);
+          }
+        }
       };
 
       const razorpay = new window.Razorpay(options);
       razorpay.on('payment.failed', function (response) {
         console.error('Payment failed:', response.error);
-        toast.error(response.error.description || "Payment failed");
+        toast.dismiss();
+        toast.error(`❌ Payment Failed: ${response.error.description || "Please try again"}`, {
+          duration: 5000,
+        });
         setIsLoading(false);
+        // Navigate to failure page
+        setTimeout(() => {
+          navigate(`/booking/payment-status?orderId=${orderId}&status=failed&reason=${encodeURIComponent(response.error.description || 'Unknown error')}`);
+        }, 2000);
       });
 
       razorpay.open();
