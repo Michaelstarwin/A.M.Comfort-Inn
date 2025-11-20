@@ -3,26 +3,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+// payment.route.ts (update webhook route)
 const express_1 = __importDefault(require("express"));
 const razorpay_service_1 = require("./razorpay.service");
 const validate_middleware_1 = require("../../shared/lib/utils/validate.middleware");
 const payment_validation_1 = require("./payment.validation");
 const router = express_1.default.Router();
 const razorpayService = new razorpay_service_1.RazorpayService();
-// Create payment order
 router.post('/create-order', (0, validate_middleware_1.validate)(payment_validation_1.createOrderSchema), async (req, res) => {
     try {
         const result = await razorpayService.createOrder(req.body);
-        res.json(result);
+        if (result.success)
+            return res.json(result);
+        return res.status(400).json(result);
     }
     catch (error) {
-        res.status(400).json({
-            success: false,
-            message: error.message
-        });
+        console.error('Create-order route error:', error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
-// Verify payment
 router.post('/verify', (0, validate_middleware_1.validate)(payment_validation_1.verifyPaymentSchema), async (req, res) => {
     try {
         const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
@@ -30,20 +29,23 @@ router.post('/verify', (0, validate_middleware_1.validate)(payment_validation_1.
         res.json(result);
     }
     catch (error) {
+        console.error('Verify route error:', error);
         res.status(400).json({
             success: false,
             message: error.message
         });
     }
 });
-// Handle Razorpay webhooks
+// IMPORTANT: use raw body and pass original string to the service
 router.post('/webhook', express_1.default.raw({ type: 'application/json' }), async (req, res) => {
     try {
-        const signature = req.headers['x-razorpay-signature'];
+        const signature = (req.headers['x-razorpay-signature'] || '');
         if (!signature) {
-            throw new Error('Missing webhook signature');
+            console.warn('Missing webhook signature header');
+            return res.status(400).json({ success: false, message: 'Missing webhook signature header' });
         }
-        await razorpayService.handleWebhook(req.body, signature);
+        const rawBodyString = req.body instanceof Buffer ? req.body.toString('utf8') : JSON.stringify(req.body);
+        await razorpayService.handleWebhook(rawBodyString, signature);
         res.json({ success: true });
     }
     catch (error) {

@@ -33,8 +33,12 @@ export const PaymentStatus = () => {
       }
 
       try {
+        console.log('Fetching booking for orderId:', orderId);
         const response = await bookingApi.getBookingByOrderId(orderId);
-        if (response.success && response.data) {
+        console.log('API Response:', response);
+        
+        if (response && response.success && response.data) {
+          console.log('Booking data received:', response.data);
           setBooking(response.data);
           
           // If status from URL is success, show success message
@@ -51,6 +55,7 @@ export const PaymentStatus = () => {
           } else {
             // Check booking payment status from API
             const bookingStatus = response.data.paymentStatus?.toLowerCase();
+            console.log('Booking payment status:', bookingStatus);
             if (bookingStatus === 'success') {
               setPaymentStatus('success');
               toast.success('Booking confirmed!');
@@ -62,12 +67,23 @@ export const PaymentStatus = () => {
             }
           }
         } else {
-          throw new Error(response.message || 'Failed to retrieve booking details.');
+          console.error('Invalid response format:', response);
+          throw new Error(response?.message || 'Failed to retrieve booking details.');
         }
       } catch (error) {
         console.error('Error fetching booking details:', error);
+        console.error('Error details:', {
+          message: error.message,
+          stack: error.stack,
+          orderId: orderId
+        });
         setPaymentStatus('error');
-        toast.error(error.message || 'Could not find booking details.');
+        // Check if it's a CORS or network error
+        if (error.message && error.message.includes('Failed to fetch')) {
+          toast.error('❌ Unable to connect to server. Please check your internet connection or try again later.');
+        } else {
+          toast.error(error.message || 'Could not find booking details.');
+        }
       } finally {
         setIsLoading(false);
       }
