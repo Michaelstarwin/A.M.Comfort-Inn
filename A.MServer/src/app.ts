@@ -21,27 +21,34 @@ const port = Number(process.env.PORT) || 7700;
 // CORS
 const allowedOrigins = [
   "https://www.amcinn.in",
+  "https://amcinn.in",
   "http://localhost:5173",  // Vite dev server
   "http://127.0.0.1:5173",  // Alternative localhost
+  "http://localhost:3000",  // Create React App default
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // allow server-to-server, curl, Postman
-    if (allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Not allowed by CORS'));
+    // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    
+    console.warn(`CORS blocked origin: ${origin}`);
+    return callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
   },
   methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
   credentials: true,
-  // include your custom header here:
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'X-Requested-With',
     'Accept',
-    'X-User-Id'         // <--- add this
+    'X-User-Id',
+    'x-rtb-fingerprint-id'  // Allow browser fingerprinting headers
   ],
-  // optionally expose specific response headers to browser (if you need)
   exposedHeaders: ['Content-Length', 'X-Response-Time'],
   maxAge: 600
 }));
