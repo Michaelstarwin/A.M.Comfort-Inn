@@ -30,16 +30,39 @@ const allowedOrigins = [
 app.use(cors({
   origin: (origin, callback) => {
     // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.includes(origin)) {
+    if (!origin) {
+      console.log('[CORS] Request with no origin - allowing');
       return callback(null, true);
     }
-    
-    console.warn(`CORS blocked origin: ${origin}`);
+
+    if (allowedOrigins.includes(origin)) {
+      console.log(`[CORS] Allowed origin: ${origin}`);
+      return callback(null, true);
+    }
+
+    // Check if it's a variation of allowed origins (http vs https, with/without www)
+    const originUrl = new URL(origin);
+    const isAllowedDomain = allowedOrigins.some(allowed => {
+      try {
+        const allowedUrl = new URL(allowed);
+        return originUrl.hostname === allowedUrl.hostname ||
+          originUrl.hostname === `www.${allowedUrl.hostname}` ||
+          `www.${originUrl.hostname}` === allowedUrl.hostname;
+      } catch {
+        return false;
+      }
+    });
+
+    if (isAllowedDomain) {
+      console.log(`[CORS] Allowed domain variation: ${origin}`);
+      return callback(null, true);
+    }
+
+    console.warn(`[CORS] BLOCKED origin: ${origin}`);
+    console.warn(`[CORS] Allowed origins are: ${allowedOrigins.join(', ')}`);
     return callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
   },
-  methods: ['GET','POST','PUT','PATCH','DELETE','OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   credentials: true,
   allowedHeaders: [
     'Content-Type',

@@ -17,14 +17,17 @@ export const PaymentStatus = () => {
   const orderId = searchParams.get('orderId');
   const status = searchParams.get('status');
   const reason = searchParams.get('reason');
-  
+
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [paymentStatus, setPaymentStatus] = useState(status || 'pending');
   const ticketRef = useRef(null);
 
   useEffect(() => {
-    const fetchBookingDetails = async () => {
+    const fetchBookingDetails = async (retryCount = 0) => {
+      const MAX_RETRIES = 3;
+      const RETRY_DELAY = 2000; // 2 seconds
+
       if (!orderId) {
         setIsLoading(false);
         setPaymentStatus('error');
@@ -33,14 +36,14 @@ export const PaymentStatus = () => {
       }
 
       try {
-        console.log('Fetching booking for orderId:', orderId);
+        console.log(`[PaymentStatus] Fetching booking for orderId: ${orderId} (attempt ${retryCount + 1})`);
         const response = await bookingApi.getBookingByOrderId(orderId);
-        console.log('API Response:', response);
-        
+        console.log('[PaymentStatus] API Response:', response);
+
         if (response && response.success && response.data) {
-          console.log('Booking data received:', response.data);
+          console.log('[PaymentStatus] Booking data received:', response.data);
           setBooking(response.data);
-          
+
           // If status from URL is success, show success message
           if (status === 'success') {
             setPaymentStatus('success');
@@ -55,7 +58,7 @@ export const PaymentStatus = () => {
           } else {
             // Check booking payment status from API
             const bookingStatus = response.data.paymentStatus?.toLowerCase();
-            console.log('Booking payment status:', bookingStatus);
+            console.log('[PaymentStatus] Booking payment status:', bookingStatus);
             if (bookingStatus === 'success') {
               setPaymentStatus('success');
               toast.success('Booking confirmed!');
@@ -67,22 +70,44 @@ export const PaymentStatus = () => {
             }
           }
         } else {
-          console.error('Invalid response format:', response);
+          console.error('[PaymentStatus] Invalid response format:', response);
           throw new Error(response?.message || 'Failed to retrieve booking details.');
         }
       } catch (error) {
-        console.error('Error fetching booking details:', error);
-        console.error('Error details:', {
+        console.error('[PaymentStatus] Error fetching booking details:', error);
+        console.error('[PaymentStatus] Error details:', {
           message: error.message,
           stack: error.stack,
-          orderId: orderId
+          orderId: orderId,
+          retryCount: retryCount
         });
+
+        // Retry logic for transient failures
+        if (retryCount < MAX_RETRIES &&
+          (error.message?.includes('Failed to fetch') ||
+            error.message?.includes('Network') ||
+            error.message?.includes('timeout'))) {
+          console.log(`[PaymentStatus] Retrying in ${RETRY_DELAY}ms... (${retryCount + 1}/${MAX_RETRIES})`);
+          toast.loading(`Connection issue. Retrying... (${retryCount + 1}/${MAX_RETRIES})`, {
+            duration: RETRY_DELAY,
+          });
+          setTimeout(() => {
+            fetchBookingDetails(retryCount + 1);
+          }, RETRY_DELAY);
+          return;
+        }
+
         setPaymentStatus('error');
-        // Check if it's a CORS or network error
-        if (error.message && error.message.includes('Failed to fetch')) {
-          toast.error('❌ Unable to connect to server. Please check your internet connection or try again later.');
+
+        // Provide specific error messages
+        if (error.message?.includes('Failed to fetch') || error.message?.includes('Network')) {
+          toast.error('❌ Unable to connect to server. Please check your internet connection and refresh the page.');
+        } else if (error.message?.includes('404') || error.message?.includes('not found')) {
+          toast.error('❌ Booking not found. Please check your email for confirmation or contact support.');
+        } else if (error.message?.includes('CORS')) {
+          toast.error('❌ Connection error. Please try refreshing the page.');
         } else {
-          toast.error(error.message || 'Could not find booking details.');
+          toast.error(error.message || '❌ Could not load booking details. Please refresh the page or contact support.');
         }
       } finally {
         setIsLoading(false);
@@ -197,21 +222,21 @@ export const PaymentStatus = () => {
           <div className="mt-6">
             <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Details</h3>
             <DetailItem label="Booking ID" value={booking.bookingId || 'N/A'} />
-            <DetailItem 
-              label="Check-in" 
-              value={`${new Date(booking.checkInDate).toLocaleDateString('en-IN', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })} @ ${booking.checkInTime || '12:00 PM'}`} 
+            <DetailItem
+              label="Check-in"
+              value={`${new Date(booking.checkInDate).toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })} @ ${booking.checkInTime || '12:00 PM'}`}
             />
-            <DetailItem 
-              label="Check-out" 
-              value={`${new Date(booking.checkOutDate).toLocaleDateString('en-IN', { 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })} @ ${booking.checkOutTime || '11:00 AM'}`} 
+            <DetailItem
+              label="Check-out"
+              value={`${new Date(booking.checkOutDate).toLocaleDateString('en-IN', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+              })} @ ${booking.checkOutTime || '11:00 AM'}`}
             />
             <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
             <DetailItem label="Rooms Reserved" value={booking.roomCount || 1} />
@@ -226,10 +251,10 @@ export const PaymentStatus = () => {
             <DetailItem label="Email" value={booking.guestInfo?.email || 'N/A'} />
             <DetailItem label="Phone" value={booking.guestInfo?.phone || 'N/A'} />
           </div>
-          
+
           <div className="mt-6 border-t pt-4 bg-blue-50 p-4 rounded-lg">
             <p className="text-sm text-gray-700">
-              <strong>Important:</strong> Please arrive at the check-in time. For any queries or changes, 
+              <strong>Important:</strong> Please arrive at the check-in time. For any queries or changes,
               please contact us at <span className="font-semibold">booking.amcinn@gmail.com</span>
             </p>
           </div>

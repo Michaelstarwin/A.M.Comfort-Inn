@@ -213,9 +213,10 @@ export async function createOrder(request: CreateOrderRequest) {
 
 // --- Get Booking by Reference ---
 export async function getBookingByReference(referenceNumber: string) {
-  return db.booking.findUnique({
+  const booking = await db.booking.findUnique({
     where: { referenceNumber },
     select: {
+      bookingId: true,
       referenceNumber: true,
       checkInDate: true,
       checkOutDate: true,
@@ -226,13 +227,45 @@ export async function getBookingByReference(referenceNumber: string) {
       guestInfo: true,
     },
   });
+
+  if (!booking) {
+    return null;
+  }
+
+  // Format the booking data to include time strings
+  return {
+    ...booking,
+    checkInTime: formatTimeFromDate(booking.checkInDate),
+    checkOutTime: formatTimeFromDate(booking.checkOutDate),
+  };
+}
+
+// Helper function to format time from DateTime
+function formatTimeFromDate(date: Date): string {
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  const displayMinutes = minutes.toString().padStart(2, '0');
+  return `${displayHours}:${displayMinutes} ${ampm}`;
 }
 
 export async function getBookingByOrderId(orderId: string) {
-  return db.booking.findFirst({
+  const booking = await db.booking.findFirst({
     where: { paymentOrderId: orderId },
     include: { roomInventory: true, user: true },
   });
+
+  if (!booking) {
+    return null;
+  }
+
+  // Format the booking data to include time strings
+  return {
+    ...booking,
+    checkInTime: formatTimeFromDate(booking.checkInDate),
+    checkOutTime: formatTimeFromDate(booking.checkOutDate),
+  };
 }
 
 
