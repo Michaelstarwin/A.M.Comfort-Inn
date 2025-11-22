@@ -5,7 +5,7 @@ class ApiClient {
     this.baseURL = baseURL;
   }
 
-   async request(endpoint, options = {}) {
+  async request(endpoint, options = {}) {
     const { headers = {}, body, params, ...restOptions } = options;
     let url = `${this.baseURL}${endpoint}`;
 
@@ -68,7 +68,23 @@ class ApiClient {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Network error' }));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+        const statusCode = response.status;
+
+        // Provide specific error messages based on status code
+        let errorMessage = errorData.message;
+        if (statusCode === 404) {
+          errorMessage = errorData.message || 'Resource not found (404)';
+        } else if (statusCode === 403) {
+          errorMessage = 'Access forbidden (403)';
+        } else if (statusCode === 500) {
+          errorMessage = 'Server error (500). Please try again later.';
+        } else if (statusCode >= 500) {
+          errorMessage = `Server error (${statusCode}). Please try again later.`;
+        }
+
+        const error = new Error(errorMessage || `HTTP error! status: ${statusCode}`);
+        error.statusCode = statusCode;
+        throw error;
       }
 
       // handle no-content responses gracefully
@@ -80,7 +96,20 @@ class ApiClient {
       }
       return await response.text();
     } catch (error) {
-      console.error('API request failed:', error);
+      console.error('API request failed:', {
+        url,
+        method: config.method || 'GET',
+        error: error.message,
+        statusCode: error.statusCode
+      });
+
+      // Enhance error message for common issues
+      if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+        error.message = 'Network error: Unable to connect to server. Please check your internet connection.';
+      } else if (error.message.includes('CORS')) {
+        error.message = 'CORS error: Unable to access the server. Please try again.';
+      }
+
       throw error;
     }
   }
@@ -91,7 +120,7 @@ class ApiClient {
   }
 
   // POST request
-   // POST request
+  // POST request
   async post(endpoint, data, options = {}) {
     return this.request(endpoint, {
       ...options,
@@ -145,12 +174,12 @@ export const adminApi = {
   createRoom: (data) => apiClient.post('/bookings/admin/inventory/room-types', data),
   updateRoom: (roomId, data) => apiClient.put(`/bookings/admin/inventory/room-types/${roomId}`, data),
   deleteRoom: (roomId) => apiClient.delete(`/bookings/admin/inventory/room-types/${roomId}`),
-  
+
   // Booking Management
   getBookings: (filters = {}) => apiClient.get('/bookings/admin/bookings', { params: filters }),
   getBookingDetails: (bookingId) => apiClient.get(`/bookings/admin/bookings/${bookingId}`),
   updateBookingStatus: (bookingId, status) => apiClient.put(`/bookings/admin/bookings/${bookingId}/status`, { status }),
-  
+
   // Analytics
   getAnalytics: (period = 'month') => apiClient.get('/bookings/admin/analytics', { params: { period } }),
   getRevenue: (period = 'month') => apiClient.get('/bookings/admin/analytics/revenue', { params: { period } }),
