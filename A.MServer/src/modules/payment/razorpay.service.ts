@@ -41,10 +41,28 @@ export class RazorpayService {
     try {
       const { bookingId, amount, currency = 'INR', notes = {} } = request;
 
+      // 1. Safety Check: Verify booking status first
+      const existingBooking = await db.booking.findUnique({
+        where: { bookingId },
+        select: { paymentStatus: true }
+      });
+
+      if (!existingBooking) {
+        return { success: false, message: 'Booking not found.' };
+      }
+
+      if (existingBooking.paymentStatus === BookingPaymentStatus.Success) {
+        return { success: false, message: 'Booking is already paid. Cannot create new order.' };
+      }
+
       const razor = this.ensureClient();
 
+      // 2. Currency Conversion: Rupees -> Paise
+      // Razorpay expects amount in smallest currency unit (paise for INR)
+      const amountInPaise = Math.round(amount * 100);
+
       const order = await razor.orders.create({
-        amount: Math.round(amount * 100), // paise
+        amount: amountInPaise,
         currency,
         receipt: `booking_${bookingId}`,
         notes: { bookingId, ...notes },
