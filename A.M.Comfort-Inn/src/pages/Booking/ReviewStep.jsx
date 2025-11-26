@@ -64,14 +64,55 @@ export const ReviewStep = ({ availabilityData, guestData, onConfirm, onBack, isL
         <DetailItem label="Check-out" value={`${availabilityData.checkOutDate} @ 11:00 AM`} />
         <DetailItem label="Room Type" value={availabilityData.roomType} />
         <DetailItem label="Rooms Reserved" value={availabilityData.roomCount} />
+        <DetailItem label="Guests" value={`${guestData.adultCount} Adults, ${guestData.childCount} Children`} />
+
+        <div className="my-2 border-t border-gray-200"></div>
+
         <DetailItem label={rateLabel} value={`₹${availabilityData.ratePerNight.toLocaleString()}`} />
         {pricingMode !== 'package' && (
           <DetailItem label="Nights" value={availabilityData.nights || 1} />
         )}
-        <div className="flex justify-between py-3 mt-2">
-          <span className="text-lg font-bold text-gray-900">{totalLabel}</span>
-          <span className="text-lg font-bold text-blue-600">₹{availabilityData.totalAmount.toLocaleString()}</span>
-        </div>
+
+        {/* Surcharge Calculation Display */}
+        {(() => {
+          const totalPax = (guestData.adultCount || 0) + (guestData.childCount || 0);
+          const nights = availabilityData.nights || 1;
+          let surchargePerNight = 0;
+          const roomType = availabilityData.roomType?.toLowerCase() || '';
+          const roomCount = availabilityData.roomCount || 1;
+
+          if (roomType.includes('deluxe')) {
+            if (totalPax === 9) surchargePerNight = 500;
+            else if (totalPax >= 10) surchargePerNight = 1000;
+          } else {
+            // Standard
+            if (roomCount === 1) {
+              if (totalPax > 4) surchargePerNight = 500;
+            } else if (roomCount === 2) {
+              if (totalPax === 9) surchargePerNight = 500;
+              else if (totalPax >= 10) surchargePerNight = 1000;
+            }
+          }
+
+          const totalSurcharge = surchargePerNight * nights;
+          const baseTotal = availabilityData.totalAmount;
+          const grandTotal = baseTotal + totalSurcharge;
+
+          return (
+            <>
+              {totalSurcharge > 0 && (
+                <div className="flex justify-between py-2 border-b border-gray-200 text-orange-600">
+                  <span className="text-sm font-medium">Extra Guest Surcharge</span>
+                  <span className="text-sm font-semibold">+ ₹{totalSurcharge.toLocaleString()}</span>
+                </div>
+              )}
+              <div className="flex justify-between py-3 mt-2">
+                <span className="text-lg font-bold text-gray-900">{totalLabel}</span>
+                <span className="text-lg font-bold text-blue-600">₹{grandTotal.toLocaleString()}</span>
+              </div>
+            </>
+          );
+        })()}
       </div>
 
       <div className="bg-gray-50 rounded-lg p-4">
@@ -82,15 +123,15 @@ export const ReviewStep = ({ availabilityData, guestData, onConfirm, onBack, isL
       </div>
 
       <div className="mt-8 grid grid-cols-2 gap-4">
-        <button 
-          onClick={onBack} 
+        <button
+          onClick={onBack}
           className="w-full bg-gray-300 text-gray-800 font-bold py-3 px-4 rounded-lg hover:bg-gray-400 transition duration-300"
           disabled={isLoading}
         >
           Back
         </button>
-        <button 
-          onClick={handleConfirm} 
+        <button
+          onClick={handleConfirm}
           className="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition duration-300 disabled:opacity-50"
           disabled={isLoading}
         >

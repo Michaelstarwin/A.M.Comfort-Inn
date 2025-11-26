@@ -60,6 +60,8 @@ const Booking = () => {
         checkOutTime: availabilityData.checkOutTime,
         roomType: availabilityData.roomType,
         roomCount: availabilityData.roomCount,
+        adultCount: guestData.adultCount,
+        childCount: guestData.childCount,
         guestInfo: {
           fullName: guestData.fullName,
           email: guestData.email,
