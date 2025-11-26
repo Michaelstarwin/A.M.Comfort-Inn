@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum BookingPaymentStatus {
+  Pending
+  Success
+  Failed
+  Refunded
+}
+
+enum RoomStatus {
+  Active
+  Inactive
+}
+
+enum TransactionType {
+  Purchase
+  Refund
+  Deposit
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+
+// ===============================================
+// Booking Module Models
+// ===============================================
+
+model RoomInventory {
+  roomId       String   @id @default(cuid())
+  roomType     String   @unique // e.g., 'Deluxe', 'Standard', 'Suite'
+  totalRooms   Int
+  currentRate  Float
+  status       RoomStatus @default(Active)
+  description  String?  // Room description and amenities
+  imageUrl     String?  // URL to room image
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  bookings Booking[]
+
+  @@map("room_inventory")
+}
+
+model Booking {
+  bookingId         String   @id @default(cuid())
+  userId            String?
+  guestInfo         Json // Guest details: {fullName, email, phone, country}
+  checkInDate       DateTime
+  checkInTime       String // HH:MM:SS format
+  checkOutDate      DateTime
+  checkOutTime      String // HH:MM:SS format
+  roomCount         Int
+  roomType          String
+  totalAmount       Float
+  paymentStatus     BookingPaymentStatus @default(Pending)
+  paymentOrderId    String?  @unique // Razorpay order ID
+  paymentId         String?  @unique // Razorpay payment ID
+  referenceNumber   String?  @unique // Generated after successful payment
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // --- Relations ---
+  roomInventoryId   String
+  roomInventory     RoomInventory @relation(fields: [roomInventoryId], references: [roomId])
+  user              User?         @relation(fields: [userId], references: [id])
+
+  @@map("bookings")
+}
+
+
+// ===============================================
+// Transaction & User Module Models (Newly Added)
+// ===============================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  balance   Float    @default(0.0)
+  role      UserRole @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Relations ---
+  transactions Transaction[]
+  purchases    Purchase[]
+  bookings     Booking[]
+
+  @@map("users")
+}
+
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Float
+  stock       Int
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // --- Relation ---
+  purchases Purchase[]
+
+  @@map("products")
+}
+
+model Transaction {
+  id            String          @id @default(cuid())
+  userId        String
+  type          TransactionType
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  description   String
+  reference     String?         @unique
+  items         Json? // Store items array for context
+  createdAt     DateTime        @default(now())
+
+  // --- Relations ---
+  user      User       @relation(fields: [userId], references: [id])
+  purchases Purchase[]
+
+  @@map("transactions")
+}
+
+model Purchase {
+  id            String   @id @default(cuid())
+  userId        String
+  productId     String
+  transactionId String
+  quantity      Int
+  unitPrice     Float
+  totalAmount   Float
+  createdAt     DateTime @default(now())
+
+  // --- Relations ---
+  user        User        @relation(fields: [userId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id])
+
+  @@map("purchases")
+}
