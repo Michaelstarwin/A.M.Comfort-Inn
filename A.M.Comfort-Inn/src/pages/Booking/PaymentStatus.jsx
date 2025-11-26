@@ -24,98 +24,87 @@ export const PaymentStatus = () => {
   const ticketRef = useRef(null);
 
   useEffect(() => {
-    const fetchBookingDetails = async (retryCount = 0) => {
-      const MAX_RETRIES = 3;
-      const RETRY_DELAY = 2000; // 2 seconds
+    let isMounted = true;
+    let pollInterval;
+    let timeoutTimer;
 
+    const fetchBookingDetails = async () => {
       if (!orderId) {
-        setIsLoading(false);
-        setPaymentStatus('error');
-        toast.error('Booking reference not found.');
+        if (isMounted) {
+          setIsLoading(false);
+          setPaymentStatus('error');
+          toast.error('Booking reference not found.');
+        }
         return;
       }
 
       try {
-        console.log(`[PaymentStatus] Fetching booking for orderId: ${orderId} (attempt ${retryCount + 1})`);
+        console.log(`[PaymentStatus] Polling booking for orderId: ${orderId}`);
         const response = await bookingApi.getBookingByOrderId(orderId);
-        console.log('[PaymentStatus] API Response:', response);
+
+        if (!isMounted) return;
 
         if (response && response.success && response.data) {
-          console.log('[PaymentStatus] Booking data received:', response.data);
-          setBooking(response.data);
+          const bookingData = response.data;
+          const bookingStatus = bookingData.paymentStatus?.toLowerCase();
 
-          // If status from URL is success, show success message
-          if (status === 'success') {
+          console.log('[PaymentStatus] Status:', bookingStatus);
+
+          if (bookingStatus === 'success' || bookingStatus === 'confirmed') {
+            setBooking(bookingData);
             setPaymentStatus('success');
-            toast.success('✅ Payment successful! Your booking is confirmed.', {
-              duration: 3000,
-            });
-          } else if (status === 'failed') {
+            setIsLoading(false);
+            toast.success('✅ Payment successful! Your booking is confirmed.');
+            return true; // Stop polling
+          } else if (bookingStatus === 'failed') {
+            setBooking(bookingData);
             setPaymentStatus('failed');
-            toast.error(`❌ Payment failed. ${reason || 'Please try again.'}`, {
-              duration: 4000,
-            });
-          } else {
-            // Check booking payment status from API
-            const bookingStatus = response.data.paymentStatus?.toLowerCase();
-            console.log('[PaymentStatus] Booking payment status:', bookingStatus);
-            if (bookingStatus === 'success') {
-              setPaymentStatus('success');
-              toast.success('Booking confirmed!');
-            } else if (bookingStatus === 'failed') {
-              setPaymentStatus('failed');
-              toast.error('Payment was not successful.');
-            } else {
-              setPaymentStatus('pending');
-            }
+            setIsLoading(false);
+            toast.error('❌ Payment failed.');
+            return true; // Stop polling
           }
-        } else {
-          console.error('[PaymentStatus] Invalid response format:', response);
-          throw new Error(response?.message || 'Failed to retrieve booking details.');
+          // If pending, continue polling
         }
       } catch (error) {
-        console.error('[PaymentStatus] Error fetching booking details:', error);
-        console.error('[PaymentStatus] Error details:', {
-          message: error.message,
-          stack: error.stack,
-          orderId: orderId,
-          retryCount: retryCount
-        });
-
-        // Retry logic for transient failures
-        if (retryCount < MAX_RETRIES &&
-          (error.message?.includes('Failed to fetch') ||
-            error.message?.includes('Network') ||
-            error.message?.includes('timeout'))) {
-          console.log(`[PaymentStatus] Retrying in ${RETRY_DELAY}ms... (${retryCount + 1}/${MAX_RETRIES})`);
-          toast.loading(`Connection issue. Retrying... (${retryCount + 1}/${MAX_RETRIES})`, {
-            duration: RETRY_DELAY,
-          });
-          setTimeout(() => {
-            fetchBookingDetails(retryCount + 1);
-          }, RETRY_DELAY);
-          return;
-        }
-
-        setPaymentStatus('error');
-
-        // Provide specific error messages
-        if (error.message?.includes('Failed to fetch') || error.message?.includes('Network')) {
-          toast.error('❌ Unable to connect to server. Please check your internet connection and refresh the page.');
-        } else if (error.message?.includes('404') || error.message?.includes('not found')) {
-          toast.error('❌ Booking not found. Please check your email for confirmation or contact support.');
-        } else if (error.message?.includes('CORS')) {
-          toast.error('❌ Connection error. Please try refreshing the page.');
-        } else {
-          toast.error(error.message || '❌ Could not load booking details. Please refresh the page or contact support.');
-        }
-      } finally {
-        setIsLoading(false);
+        console.error('[PaymentStatus] Error polling:', error);
+        // Don't stop polling on transient errors, just log
       }
+      return false; // Continue polling
     };
 
-    fetchBookingDetails();
-  }, [orderId, status, reason]);
+    const startPolling = async () => {
+      // Initial check
+      const done = await fetchBookingDetails();
+      if (done) return;
+
+      // Poll every 2 seconds
+      pollInterval = setInterval(async () => {
+        const stop = await fetchBookingDetails();
+        if (stop) {
+          clearInterval(pollInterval);
+          clearTimeout(timeoutTimer);
+        }
+      }, 2000);
+
+      // Stop after 15 seconds
+      timeoutTimer = setTimeout(() => {
+        if (isMounted && isLoading) {
+          clearInterval(pollInterval);
+          setIsLoading(false);
+          setPaymentStatus('timeout'); // You might want to handle this state specifically or show 'pending' with a message
+          toast('Payment verification timed out. Please check your email.', { icon: '⚠️' });
+        }
+      }, 15000);
+    };
+
+    startPolling();
+
+    return () => {
+      isMounted = false;
+      clearInterval(pollInterval);
+      clearTimeout(timeoutTimer);
+    };
+  }, [orderId]);
 
   const handlePrint = () => {
     const printContents = ticketRef.current.innerHTML;

@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from "express";
 import dotenv from "dotenv";
 import path from "path";
 import cors from "cors";
+import 'dotenv/config';
 
 // Import routes
 import bookingRoutes from "./modules/booking/booking.route";
@@ -80,7 +81,12 @@ app.use(cors({
 app.options("*", (req, res) => res.sendStatus(204));
 
 // Body parsers (MUST be before routes)
-app.use(express.json());
+// Body parsers (MUST be before routes)
+app.use(express.json({
+  verify: (req: any, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 
 // Express configuration
