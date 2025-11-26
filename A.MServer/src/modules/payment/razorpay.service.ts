@@ -51,8 +51,10 @@ export class RazorpayService {
         payment_capture: true
       }) as any;
 
+      console.log(`[Razorpay] Created order ${order.id} for booking ${bookingId}`);
+
       try {
-        await db.booking.update({
+        const updateResult = await db.booking.update({
           where: { bookingId },
           data: {
             paymentOrderId: order.id,
@@ -60,8 +62,10 @@ export class RazorpayService {
             updatedAt: new Date()
           }
         });
+        console.log(`[Razorpay] ✅ Successfully linked order ${order.id} to booking ${bookingId}`);
+        console.log(`[Razorpay] Updated booking paymentOrderId:`, updateResult.paymentOrderId);
       } catch (dbErr: any) {
-        console.error('DB update after order creation failed:', dbErr);
+        console.error(`[Razorpay] ❌ DB update FAILED for booking ${bookingId}:`, dbErr);
         // Decide: attempt to cleanup or return partial success. Here we surface error to caller.
         return { success: false, message: 'Failed to link order with booking', error: dbErr.message };
       }
