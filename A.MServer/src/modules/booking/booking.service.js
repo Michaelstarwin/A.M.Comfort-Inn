@@ -96,11 +96,22 @@ function preBook(request) {
             throw new Error(availability.message || 'Rooms are no longer available for the selected dates.'); // Use message from check
         }
         const roomInventory = yield db_1.db.roomInventory.findUniqueOrThrow({ where: { roomType: request.roomType } });
-        // Extract guestInfo separately to avoid spreading potentially undefined userId
-        const { guestInfo, userId } = request, restOfRequest = __rest(request, ["guestInfo", "userId"]);
-        const booking = yield db_1.db.booking.create({
-            data: Object.assign(Object.assign({}, restOfRequest), { guestInfo: guestInfo, userId: userId, checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`), checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`), totalAmount: availability.totalAmount, roomInventoryId: roomInventory.roomId, paymentStatus: client_1.BookingPaymentStatus.Pending }),
-        });
+        // Extract guestInfo and ensure we don't pass unexpected fields to Prisma
+        const { guestInfo, userId, adultCount, childCount } = request;
+        const bookingPayload = {
+            guestInfo: Object.assign(Object.assign({}, (guestInfo || {})), { adultCount, childCount }),
+            userId: userId || undefined,
+            checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
+            checkInTime: request.checkInTime,
+            checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
+            checkOutTime: request.checkOutTime,
+            roomCount: request.roomCount,
+            roomType: request.roomType,
+            totalAmount: availability.totalAmount,
+            roomInventoryId: roomInventory.roomId,
+            paymentStatus: client_1.BookingPaymentStatus.Pending,
+        };
+        const booking = yield db_1.db.booking.create({ data: bookingPayload });
         return {
             bookingId: booking.bookingId,
             totalAmount: booking.totalAmount,

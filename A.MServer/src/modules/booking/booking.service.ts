@@ -305,21 +305,25 @@ export async function preBook(request: PreBookRequest) {
     where: { roomType: { equals: request.roomType, mode: 'insensitive' } }
   });
 
-  const { guestInfo, userId, adultCount, childCount, ...restOfRequest } = request;
+  const { guestInfo, userId, adultCount, childCount } = request;
+
+  // Build explicit payload for Prisma create to avoid passing unexpected fields
+  const bookingPayload: any = {
+    guestInfo: { ...(guestInfo || {}), adultCount, childCount },
+    userId: userId || undefined,
+    checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
+    checkInTime: request.checkInTime,
+    checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
+    checkOutTime: request.checkOutTime,
+    roomCount: request.roomCount,
+    roomType: request.roomType,
+    totalAmount: availability.totalAmount,
+    roomInventoryId: roomInventory.roomId,
+    paymentStatus: BookingPaymentStatus.Pending,
+  };
 
   // Consider wrapping the create in a transaction if you later will immediately create payment order
-  const booking = await db.booking.create({
-    data: {
-      ...restOfRequest,
-      guestInfo: { ...guestInfo, adultCount, childCount },
-      userId,
-      checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
-      checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
-      totalAmount: availability.totalAmount,
-      roomInventoryId: roomInventory.roomId,
-      paymentStatus: BookingPaymentStatus.Pending,
-    },
-  });
+  const booking = await db.booking.create({ data: bookingPayload });
 
   return { success: true, bookingId: booking.bookingId, totalAmount: booking.totalAmount };
 }
