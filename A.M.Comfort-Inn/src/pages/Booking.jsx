@@ -60,6 +60,8 @@ const Booking = () => {
         checkOutTime: availabilityData.checkOutTime,
         roomType: availabilityData.roomType,
         roomCount: availabilityData.roomCount,
+        adultCount: guestData.adultCount,
+        childCount: guestData.childCount,
         guestInfo: {
           fullName: guestData.fullName,
           email: guestData.email,
@@ -177,7 +179,14 @@ const Booking = () => {
       case 1:
         return <AvailabilityStep onSuccess={handleAvailabilitySuccess} />;
       case 2:
-        return <GuestDetailsStep onSuccess={handleGuestSuccess} onBack={() => setCurrentStep(1)} />;
+        return (
+          <GuestDetailsStep
+            onSuccess={handleGuestSuccess}
+            onBack={() => setCurrentStep(1)}
+            roomType={availabilityData?.roomType}
+            roomCount={availabilityData?.roomCount}
+          />
+        );
       case 3:
         return (
           <ReviewStep

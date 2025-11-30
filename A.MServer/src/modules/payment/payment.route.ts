@@ -1,12 +1,14 @@
-// payment.route.ts (update webhook route)
+// A.MServer/src/modules/payment/payment.route.ts
+
 import express from 'express';
 import { RazorpayService } from './razorpay.service';
 import { validate } from '../../shared/lib/utils/validate.middleware';
-import { createOrderSchema, verifyPaymentSchema } from './payment.validation';
+import { createOrderSchema } from './payment.validation'; // Removed verifyPaymentSchema for debugging
 
 const router = express.Router();
 const razorpayService = new RazorpayService();
 
+// Create Order Route
 router.post('/create-order', validate(createOrderSchema), async (req, res) => {
   try {
     const result = await razorpayService.createOrder(req.body);
@@ -18,43 +20,66 @@ router.post('/create-order', validate(createOrderSchema), async (req, res) => {
   }
 });
 
-router.post('/verify', validate(verifyPaymentSchema), async (req, res) => {
+// Verify Route - THE CRITICAL FIX
+router.post('/verify', async (req, res) => {
   try {
-    const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
+    console.log("--- START PAYMENT VERIFICATION ---");
+    console.log("1. Raw Body received from Frontend:", req.body);
+
+    // 1. SAFEGUARD: Handle different naming conventions
+    // Frontend might send 'razorpay_payment_id' OR 'paymentId'
+    const paymentId = req.body.razorpay_payment_id || req.body.paymentId;
+    const orderId = req.body.razorpay_order_id || req.body.orderId;
+    const signature = req.body.razorpay_signature || req.body.signature;
+
+    console.log("2. Extracted Variables:", { paymentId, orderId, signature });
+
+    // 2. CHECK: Are they missing?
+    if (!paymentId || !orderId || !signature) {
+      console.error("FAILED: Missing required payment fields.");
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: paymentId, orderId, or signature"
+      });
+    }
+
+    // 3. EXECUTE: Call the service
     const result = await razorpayService.verifyPayment(
-      razorpay_payment_id,
-      razorpay_order_id,
-      razorpay_signature
+      paymentId,
+      orderId,
+      signature
     );
+
+    console.log("--- VERIFICATION SUCCESS ---");
     res.json(result);
+
   } catch (error: any) {
-    console.error('Verify route error:', error);
+    console.error('--- VERIFICATION FAILED ---');
+    console.error('Error Message:', error.message);
     res.status(400).json({
       success: false,
-      message: error.message
+      message: error.message || "Payment Verification Failed"
     });
   }
 });
 
-// IMPORTANT: use raw body and pass original string to the service
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+// Webhook Route
+router.post('/webhook', async (req: any, res) => {
   try {
     const signature = (req.headers['x-razorpay-signature'] || '') as string;
     if (!signature) {
-      console.warn('Missing webhook signature header');
       return res.status(400).json({ success: false, message: 'Missing webhook signature header' });
     }
 
-    const rawBodyString = req.body instanceof Buffer ? req.body.toString('utf8') : JSON.stringify(req.body);
+    // Use rawBody captured by app.ts middleware if available, otherwise fall back to body
+    // (Note: app.ts middleware guarantees rawBody is present if configured correctly)
+    const rawBody = req.rawBody || req.body;
 
-    await razorpayService.handleWebhook(rawBodyString, signature);
+    await razorpayService.handleWebhook(rawBody, signature);
     res.json({ success: true });
   } catch (error: any) {
     console.error('Webhook Error:', error);
-    res.status(400).json({
-      success: false,
-      message: error.message
-    });
+    res.status(400).json({ success: false, message: error.message });
   }
 });
 

@@ -105,29 +105,75 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
   const houseState = await computeHouseAvailability(checkInDateTime, checkOutDateTime);
 
   const reqRoomType = request.roomType.trim().toLowerCase();
+  const totalPax = request.adultCount + request.childCount;
+  const roomRate = roomInventory.currentRate; // ASA
+
+  let baseRatePerNight = 0;
+  let surchargePerNight = 0;
 
   if (reqRoomType === 'deluxe') {
     if (!houseState.deluxeAvailable) {
-      return { isAvailable: false, totalAmount: 0, ratePerNight: roomInventory.currentRate, availableRooms: 0, nights, pricingMode: 'package' as const, message: 'Conflict: The home is already booked for the selected dates.' };
+      return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, nights, pricingMode: 'package' as const, message: 'Conflict: The home is already booked for the selected dates.' };
     }
-    return { isAvailable: true, totalAmount: roomInventory.currentRate, ratePerNight: roomInventory.currentRate, availableRooms: houseState.totalRooms, nights, pricingMode: 'package' as const, message: 'Success: The entire home is available for the selected dates.' };
+
+    // Deluxe Logic: Flat Rate
+    baseRatePerNight = roomRate;
+
+    // Deluxe Surcharges (Always 2 rooms effectively)
+    if (totalPax === 9) surchargePerNight = 500;
+    else if (totalPax >= 10) surchargePerNight = 1000;
+
+    const totalAmount = (baseRatePerNight + surchargePerNight) * nights;
+
+    return {
+      isAvailable: true,
+      totalAmount,
+      ratePerNight: baseRatePerNight,
+      surchargePerNight,
+      availableRooms: houseState.totalRooms,
+      nights,
+      pricingMode: 'package' as const,
+      message: 'Success: The entire home is available for the selected dates.'
+    };
   }
 
   // standard rooms
   if (!houseState.deluxeAvailable && houseState.standardRoomsAvailable === 0) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomInventory.currentRate, availableRooms: 0, nights, pricingMode: 'nightly' as const, message: 'Conflict: The home is already booked for the selected dates.' };
+    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, nights, pricingMode: 'nightly' as const, message: 'Conflict: The home is already booked for the selected dates.' };
   }
 
   const allowedStandardRooms = Math.min(houseState.standardRoomsAvailable, roomInventory.totalRooms ?? houseState.standardRoomsAvailable);
   if (allowedStandardRooms <= 0) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomInventory.currentRate, availableRooms: 0, message: 'Conflict: The home is already booked for the selected dates.' };
+    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, message: 'Conflict: The home is already booked for the selected dates.' };
   }
 
   if (allowedStandardRooms < request.roomCount) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomInventory.currentRate, availableRooms: allowedStandardRooms, nights, pricingMode: 'nightly' as const, message: allowedStandardRooms > 0 ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.` : 'Conflict: The home is already booked for the selected dates.' };
+    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: allowedStandardRooms, nights, pricingMode: 'nightly' as const, message: allowedStandardRooms > 0 ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.` : 'Conflict: The home is already booked for the selected dates.' };
   }
 
-  return { isAvailable: true, totalAmount: roomInventory.currentRate * request.roomCount * nights, ratePerNight: roomInventory.currentRate, availableRooms: allowedStandardRooms, nights, pricingMode: 'nightly' as const, message: `Success: ${allowedStandardRooms} room(s) are currently available.` };
+  // Standard Logic: Per Room Rate
+  baseRatePerNight = roomRate * request.roomCount;
+
+  // Standard Surcharges
+  if (request.roomCount === 1) {
+    if (totalPax > 4) surchargePerNight = 500;
+  } else if (request.roomCount === 2) {
+    if (totalPax === 9) surchargePerNight = 500;
+    else if (totalPax >= 10) surchargePerNight = 1000;
+  }
+
+  const totalAmount = (baseRatePerNight + surchargePerNight) * nights;
+
+  return {
+    isAvailable: true,
+    totalAmount,
+    ratePerNight: roomRate, // Unit rate
+    surchargePerNight,
+    availableRooms: allowedStandardRooms,
+    nights,
+    pricingMode: 'nightly' as const,
+    message: `Success: ${allowedStandardRooms} room(s) are currently available.`
+  };
 }
 export async function linkOrderToBooking(bookingId: string, orderId: string) {
   try {
@@ -173,13 +219,13 @@ export async function preBook(request: PreBookRequest) {
     where: { roomType: { equals: request.roomType, mode: 'insensitive' } }
   });
 
-  const { guestInfo, userId, ...restOfRequest } = request;
+  const { guestInfo, userId, adultCount, childCount, ...restOfRequest } = request;
 
   // Consider wrapping the create in a transaction if you later will immediately create payment order
   const booking = await db.booking.create({
     data: {
       ...restOfRequest,
-      guestInfo,
+      guestInfo: { ...guestInfo, adultCount, childCount },
       userId,
       checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
       checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
