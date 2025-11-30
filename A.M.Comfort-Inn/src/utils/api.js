@@ -1,18 +1,24 @@
 // API client utility for making HTTP requests to the backend
 // API client utility for making HTTP requests to the backend
 const getBaseUrl = () => {
+  // 1. Priority: Check if running on localhost (dev or preview)
+  if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    console.log('[API] Detected localhost, using local backend');
+    return 'http://localhost:7700/api';
+  }
+
+  // 2. Check environment variable
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL;
   }
-  // If running locally, default to local backend
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:7700/api';
-  }
-  // Otherwise use production backend
+
+  // 3. Fallback to production
+  console.log('[API] Defaulting to production URL');
   return 'https://a-m-comfort-inn.onrender.com/api';
 };
 
 const API_BASE_URL = getBaseUrl();
+console.log('[API] Initialized with Base URL:', API_BASE_URL, 'Hostname:', window.location.hostname);
 class ApiClient {
   constructor(baseURL) {
     this.baseURL = baseURL;

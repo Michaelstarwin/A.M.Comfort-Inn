@@ -1,7 +1,7 @@
 // API Configuration for different environments
 const configs = {
   development: {
-    API_URL: 'https://a-m-comfort-inn.onrender.com/api',
+    API_URL: 'http://localhost:7700/api',
     RAZORPAY_KEY_ID: 'rzp_live_RgjfGSw269T1W4',
   },
   production: {
