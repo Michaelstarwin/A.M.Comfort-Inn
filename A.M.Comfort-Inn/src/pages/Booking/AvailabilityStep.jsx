@@ -145,11 +145,25 @@ export const AvailabilityStep = ({ onSuccess }) => {
 
   // Occupancy Logic
   const totalGuests = (adultCount || 0) + (childCount || 0);
-  const maxGuests = 5 * (currentRoomCount || 1);
-  const maxAdults = 3 * (currentRoomCount || 1);
+
+  let maxGuests = 5;
+  let maxAdults = 3;
+  let maxChildren = 3;
+
+  if (selectedRoom?.name === 'Deluxe Room') {
+    maxGuests = 10;
+    maxAdults = 6;
+    maxChildren = 8;
+  } else {
+    // Standard Room
+    const count = currentRoomCount || 1;
+    maxGuests = 5 * count;
+    maxAdults = 3 * count;
+    maxChildren = 3 * count;
+  }
 
   const isAdultMaxReached = adultCount >= maxAdults || totalGuests >= maxGuests;
-  const isChildMaxReached = totalGuests >= maxGuests;
+  const isChildMaxReached = childCount >= maxChildren || totalGuests >= maxGuests;
   const isAdultMinReached = adultCount <= 1;
   const isChildMinReached = childCount <= 0;
 
