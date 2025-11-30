@@ -12,6 +12,8 @@ const availabilitySchema = z.object({
   checkInDate: z.string().min(1, 'Check-in date is required'),
   checkOutDate: z.string().min(1, 'Check-out date is required'),
   mobileNumber: z.string().min(10, 'Please enter a valid mobile number'),
+  adultCount: z.number().min(1, 'At least 1 adult is required'),
+  childCount: z.number().min(0).default(0),
 });
 
 export const AvailabilityStep = ({ onSuccess }) => {
@@ -32,6 +34,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
       checkInDate: new Date().toISOString().split('T')[0],
       checkOutDate: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().split('T')[0],
       mobileNumber: '',
+      adultCount: 2,
+      childCount: 0,
     }
   });
 
@@ -58,6 +62,8 @@ export const AvailabilityStep = ({ onSuccess }) => {
   const currentRoomCount = watch('roomCount');
   const checkInDate = watch('checkInDate');
   const checkOutDate = watch('checkOutDate');
+  const adultCount = watch('adultCount');
+  const childCount = watch('childCount');
   const [isRoomCountEditable, setIsRoomCountEditable] = useState(false);
   const selectedRoom = useMemo(
     () => rooms.find(r => r.name === roomType),
@@ -136,6 +142,32 @@ export const AvailabilityStep = ({ onSuccess }) => {
       setValue('roomCount', 0);
     }
   }, [selectedRoom, setValue, currentRoomCount, houseStatus.standardRoomsAvailable]);
+
+  // Occupancy Logic
+  const totalGuests = (adultCount || 0) + (childCount || 0);
+  const maxGuests = 5 * (currentRoomCount || 1);
+  const maxAdults = 3 * (currentRoomCount || 1);
+
+  const isAdultMaxReached = adultCount >= maxAdults || totalGuests >= maxGuests;
+  const isChildMaxReached = totalGuests >= maxGuests;
+  const isAdultMinReached = adultCount <= 1;
+  const isChildMinReached = childCount <= 0;
+
+  const handleIncrementAdult = () => {
+    if (!isAdultMaxReached) setValue('adultCount', (adultCount || 0) + 1);
+  };
+
+  const handleDecrementAdult = () => {
+    if (!isAdultMinReached) setValue('adultCount', (adultCount || 0) - 1);
+  };
+
+  const handleIncrementChild = () => {
+    if (!isChildMaxReached) setValue('childCount', (childCount || 0) + 1);
+  };
+
+  const handleDecrementChild = () => {
+    if (!isChildMinReached) setValue('childCount', (childCount || 0) - 1);
+  };
 
   const onSubmit = async (data) => {
     if (!selectedRoom) {
@@ -293,9 +325,9 @@ export const AvailabilityStep = ({ onSuccess }) => {
           max={
             selectedRoom?.name === 'Standard Room'
               ? Math.min(
-                  houseStatus.standardRoomsAvailable || selectedRoom.maxRooms,
-                  selectedRoom.maxRooms ?? selectedRoom.includedRooms
-                )
+                houseStatus.standardRoomsAvailable || selectedRoom.maxRooms,
+                selectedRoom.maxRooms ?? selectedRoom.includedRooms
+              )
               : selectedRoom?.maxRooms
           }
         />
@@ -308,6 +340,29 @@ export const AvailabilityStep = ({ onSuccess }) => {
         />
       </div>
 
+      {/* Guest Counts */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 p-4 bg-gray-50 rounded-lg">
+        <StepperInput
+          label="Adults"
+          value={adultCount}
+          onIncrement={handleIncrementAdult}
+          onDecrement={handleDecrementAdult}
+          minDisabled={isAdultMinReached}
+          maxDisabled={isAdultMaxReached}
+        />
+        <StepperInput
+          label="Children"
+          value={childCount}
+          onIncrement={handleIncrementChild}
+          onDecrement={handleDecrementChild}
+          minDisabled={isChildMinReached}
+          maxDisabled={isChildMaxReached}
+        />
+        <div className="col-span-1 md:col-span-2 text-xs text-gray-500 mt-1">
+          Max occupancy: {maxGuests} guests ({maxAdults} adults max)
+        </div>
+      </div>
+
       <button type="submit" className="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg mt-8 hover:bg-blue-700 transition duration-300 disabled:opacity-50" disabled={isLoading}>
         {isLoading ? 'Checking...' : 'Check Availability'}
       </button>
@@ -315,7 +370,7 @@ export const AvailabilityStep = ({ onSuccess }) => {
   );
 };
 
-// Reusable Form Components (can be moved to their own files)
+// Reusable Form Components
 
 const FormInput = ({ label, name, type, register, error, parseAs, readOnly, disabled, ...rest }) => (
   <div className="w-full">
@@ -344,5 +399,32 @@ const FormSelect = ({ label, name, register, error, children }) => (
       {children}
     </select>
     {error && <p className="text-xs text-red-600 mt-1">{error.message}</p>}
+  </div>
+);
+
+const StepperInput = ({ label, value, onIncrement, onDecrement, minDisabled, maxDisabled }) => (
+  <div className="w-full">
+    <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+    <div className="flex items-center space-x-3">
+      <button
+        type="button"
+        onClick={onDecrement}
+        disabled={minDisabled}
+        className={`w-10 h-10 rounded-full border flex items-center justify-center text-lg font-bold transition-colors
+          ${minDisabled ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-500 bg-white'}`}
+      >
+        -
+      </button>
+      <span className="text-lg font-semibold w-8 text-center">{value}</span>
+      <button
+        type="button"
+        onClick={onIncrement}
+        disabled={maxDisabled}
+        className={`w-10 h-10 rounded-full border flex items-center justify-center text-lg font-bold transition-colors
+          ${maxDisabled ? 'border-gray-200 text-gray-300 cursor-not-allowed' : 'border-gray-300 text-gray-600 hover:border-blue-500 hover:text-blue-500 bg-white'}`}
+      >
+        +
+      </button>
+    </div>
   </div>
 );
