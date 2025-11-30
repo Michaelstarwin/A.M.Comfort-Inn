@@ -112,10 +112,10 @@ const Booking = () => {
                 icon: '✅',
               });
               setIsLoading(false);
-              // Navigate to payment status page
-              setTimeout(() => {
-                navigate(`/booking/payment-status?orderId=${orderId}&status=success`);
-              }, 1500);
+
+              // Force redirect to payment status page
+              console.log('Redirecting to payment status page...');
+              window.location.href = `/booking/payment-status?orderId=${orderId}&status=success`;
             } else {
               throw new Error("Payment verification failed");
             }
@@ -141,7 +141,7 @@ const Booking = () => {
           color: "#2563eb",
         },
         modal: {
-          ondismiss: function() {
+          ondismiss: function () {
             toast.dismiss();
             toast.error("Payment cancelled. You can try again when ready.");
             setIsLoading(false);
@@ -196,7 +196,7 @@ const Booking = () => {
   return (
     // Add pt-20 (80px) to offset the fixed navbar
     <div className="booking bg-gray-50 min-h-screen pt-20">
-     <Toaster position="top-right" />
+      <Toaster position="top-right" />
       {/* NEW: Clean heading section */}
       <div className="container mx-auto pt-16 pb-12 text-center">
         <h1 className="text-4xl md:text-5xl font-bold text-primary-blue mb-4 font-playfair animate-fade-in-up">
@@ -215,7 +215,7 @@ const Booking = () => {
           className="max-w-2xl mx-auto bg-white shadow-xl rounded-lg overflow-hidden animate-fade-in-up"
           style={{ animationDelay: "0.4s" }}
         >
-{renderStep()}
+          {renderStep()}
         </div>
 
       </div>

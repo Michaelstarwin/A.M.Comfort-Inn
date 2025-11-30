@@ -239,9 +239,11 @@ async function sendConfirmationEmail(booking: Booking) {
   const recipient = guestInfo?.email;
 
   if (!recipient) {
-    console.warn(`Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
+    console.warn(`[Razorpay Service] Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
     return;
   }
+
+  console.log(`[Razorpay Service] Preparing to send confirmation email to ${recipient} for booking ${booking.bookingId}`);
 
   const bookingDetails = {
     bookingId: booking.bookingId,
@@ -257,7 +259,8 @@ async function sendConfirmationEmail(booking: Booking) {
 
   try {
     await sendBookingConfirmationEmail(recipient, bookingDetails);
+    console.log(`[Razorpay Service] Confirmation email sent successfully for booking ${booking.bookingId}`);
   } catch (error) {
-    console.error('Booking confirmation email failed:', error);
+    console.error(`[Razorpay Service] Booking confirmation email failed for booking ${booking.bookingId}:`, error);
   }
 }
