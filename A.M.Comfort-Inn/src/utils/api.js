@@ -1,5 +1,18 @@
 // API client utility for making HTTP requests to the backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://a-m-comfort-inn.onrender.com/api';
+// API client utility for making HTTP requests to the backend
+const getBaseUrl = () => {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL;
+  }
+  // If running locally, default to local backend
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:7700/api';
+  }
+  // Otherwise use production backend
+  return 'https://a-m-comfort-inn.onrender.com/api';
+};
+
+const API_BASE_URL = getBaseUrl();
 class ApiClient {
   constructor(baseURL) {
     this.baseURL = baseURL;
