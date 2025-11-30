@@ -114,10 +114,10 @@ const Booking = () => {
                 icon: '✅',
               });
               setIsLoading(false);
-              // Navigate to payment status page
-              setTimeout(() => {
-                navigate(`/booking/payment-status?orderId=${orderId}&status=success`);
-              }, 1500);
+
+              // Force redirect to payment status page
+              console.log('Redirecting to payment status page...');
+              window.location.href = `/booking/payment-status?orderId=${orderId}&status=success`;
             } else {
               throw new Error("Payment verification failed");
             }
