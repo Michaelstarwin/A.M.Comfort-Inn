@@ -106,30 +106,38 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
 
   const reqRoomType = request.roomType.trim().toLowerCase();
   const totalPax = request.adultCount + request.childCount;
-  const roomRate = roomInventory.currentRate; // ASA
 
-  let baseRatePerNight = 0;
-  let surchargePerNight = 0;
-
+  // --- DELUXE ROOM LOGIC ---
   if (reqRoomType === 'deluxe') {
     if (!houseState.deluxeAvailable) {
-      return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, nights, pricingMode: 'package' as const, message: 'Conflict: The home is already booked for the selected dates.' };
+      return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, nights, pricingMode: 'package' as const, message: 'Conflict: The home is already booked for the selected dates.' };
     }
 
-    // Deluxe Logic: Flat Rate
-    baseRatePerNight = roomRate;
+    // Deluxe Constraints
+    // Max Guests: 10
+    // Max Adults: 6
+    if (totalPax > 10) {
+      return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, message: 'Max occupancy for Deluxe Room is 10 guests.' };
+    }
+    if (request.adultCount > 6) {
+      return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, message: 'Max adults allowed in Deluxe Room is 6.' };
+    }
 
-    // Deluxe Surcharges (Always 2 rooms effectively)
-    if (totalPax === 9) surchargePerNight = 500;
-    else if (totalPax >= 10) surchargePerNight = 1000;
+    // Pricing Rules
+    // <= 8 guests: 4500
+    // 9 guests: 5000
+    // 10 guests: 5500
+    let nightlyRate = 4500;
+    if (totalPax === 9) nightlyRate = 5000;
+    if (totalPax === 10) nightlyRate = 5500;
 
-    const totalAmount = (baseRatePerNight + surchargePerNight) * nights;
+    const totalAmount = nightlyRate * nights;
 
     return {
       isAvailable: true,
       totalAmount,
-      ratePerNight: baseRatePerNight,
-      surchargePerNight,
+      ratePerNight: nightlyRate,
+      surchargePerNight: 0,
       availableRooms: houseState.totalRooms,
       nights,
       pricingMode: 'package' as const,
@@ -137,38 +145,116 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
     };
   }
 
-  // standard rooms
+  // --- STANDARD ROOM LOGIC ---
+  // Standard rooms are booked individually. 
+  // However, the user's notes imply a "per room" logic or a "total" logic?
+  // "If Adult 4, Max child 6" -> This implies 2 rooms (Total 10 capacity).
+  // Let's assume the pricing rules apply PER ROOM.
+
   if (!houseState.deluxeAvailable && houseState.standardRoomsAvailable === 0) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, nights, pricingMode: 'nightly' as const, message: 'Conflict: The home is already booked for the selected dates.' };
+    return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, nights, pricingMode: 'nightly' as const, message: 'Conflict: The home is already booked for the selected dates.' };
   }
 
   const allowedStandardRooms = Math.min(houseState.standardRoomsAvailable, roomInventory.totalRooms ?? houseState.standardRoomsAvailable);
-  if (allowedStandardRooms <= 0) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: 0, message: 'Conflict: The home is already booked for the selected dates.' };
-  }
-
   if (allowedStandardRooms < request.roomCount) {
-    return { isAvailable: false, totalAmount: 0, ratePerNight: roomRate, availableRooms: allowedStandardRooms, nights, pricingMode: 'nightly' as const, message: allowedStandardRooms > 0 ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.` : 'Conflict: The home is already booked for the selected dates.' };
+    return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: allowedStandardRooms, nights, pricingMode: 'nightly' as const, message: allowedStandardRooms > 0 ? `Conflict: Only ${allowedStandardRooms} room(s) left for the selected dates.` : 'Conflict: The home is already booked for the selected dates.' };
   }
 
-  // Standard Logic: Per Room Rate
-  baseRatePerNight = roomRate * request.roomCount;
+  // Validate Capacity Per Room
+  // Max Guests per room: 5
+  // Max Adults per room: 3
+  const avgGuestsPerRoom = Math.ceil(totalPax / request.roomCount);
+  const avgAdultsPerRoom = Math.ceil(request.adultCount / request.roomCount);
 
-  // Standard Surcharges
-  if (request.roomCount === 1) {
-    if (totalPax > 4) surchargePerNight = 500;
-  } else if (request.roomCount === 2) {
-    if (totalPax === 9) surchargePerNight = 500;
-    else if (totalPax >= 10) surchargePerNight = 1000;
+  if (avgGuestsPerRoom > 5) {
+    return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, message: 'Max occupancy is 5 guests per Standard Room.' };
+  }
+  if (avgAdultsPerRoom > 3) {
+    return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, message: 'Max adults allowed is 3 per Standard Room.' };
   }
 
-  const totalAmount = (baseRatePerNight + surchargePerNight) * nights;
+  // Pricing Rules Per Room
+  // <= 4 guests: 3000
+  // 5 guests: 3500
+  let totalNightlyRate = 0;
+
+  // Distribute guests across rooms (simple distribution)
+  let remainingPax = totalPax;
+  for (let i = 0; i < request.roomCount; i++) {
+    const guestsInThisRoom = Math.min(remainingPax, 5); // Fill up to 5
+    // Actually, we should distribute evenly or assume worst case? 
+    // Let's use the user's rule: "Total <= 8 => 4500" (for 2 rooms?)
+    // Wait, the user notes for Standard Room say:
+    // "Total <= 5"
+    // "If <= 4 => 3000"
+    // "If > 4 => 3500"
+    // This seems to be PER ROOM.
+
+    // However, if they book 2 rooms, the total capacity is 10.
+    // The user notes for "Total <= 10" (2 rooms?)
+    // "If <= 8 => 4500" (Wait, 3000+3000 = 6000? No, 4500 is cheaper?)
+    // Ah, the notes say: "Total should be <= 10. If <= 8 => Rs 4500. If 9 => 5000. If 10 => 5500."
+    // This matches the Deluxe pricing!
+    // Did the user mean that booking 2 Standard Rooms = Deluxe Room pricing?
+    // "Deluxe Room" description says "Entire home with two bedrooms".
+    // So 2 Standard Rooms IS the Deluxe Room effectively?
+
+    // Let's stick to the Per Room logic for 1 Standard Room, and the Deluxe logic for 2 Standard Rooms (if they select Deluxe).
+    // If they select "Standard Room" x 2, should we apply the Deluxe pricing?
+    // The user notes show "Standard Room" separate page.
+    // "Default - 2 Adult 2 Child Rs 3000"
+    // "Max Adult 3, Max Child 3"
+    // "If Adult 3, Child Max 2"
+    // "If Child 3, Adult Max 2"
+    // "Total <= 5"
+    // "If <= 4 => 3000"
+    // "If > 4 => 3500"
+
+    // So for Standard Room (1 Room):
+    // <= 4: 3000
+    // 5: 3500
+
+    let roomPrice = 3000;
+    if (guestsInThisRoom > 4) roomPrice = 3500; // This logic is tricky if we don't know exact distribution.
+    // Let's assume:
+    // If totalPax / roomCount > 4, then apply surcharge.
+    // Or better: Calculate total base price and add surcharge for extra guests.
+
+    // Actually, let's simplify:
+    // Base price per room = 3000.
+    // Capacity covered = 4 per room.
+    // Extra guest charge = 500.
+
+    // Total capacity covered by base price = 4 * roomCount.
+    // Extra guests = Math.max(0, totalPax - (4 * roomCount));
+    // Total Price = (3000 * roomCount) + (500 * Extra guests)
+
+    // Let's verify with "5 guests":
+    // 1 Room: 3000 + 500*1 = 3500. Correct.
+
+    // What if 2 Rooms, 9 guests?
+    // Base: 3000*2 = 6000.
+    // Covered: 8.
+    // Extra: 1.
+    // Total: 6500.
+    // BUT Deluxe price for 9 guests is 5000.
+    // So booking 2 Standard Rooms is MORE EXPENSIVE than Deluxe. This makes sense.
+    // Deluxe is a "package" deal.
+
+    // So, for Standard Room selection, we use the Standard Room rules strictly.
+
+    totalNightlyRate = (3000 * request.roomCount) + (Math.max(0, totalPax - (4 * request.roomCount)) * 500);
+    remainingPax -= guestsInThisRoom; // Not really used in this simplified formula
+    break; // We calculated total directly
+  }
+
+  const totalAmount = totalNightlyRate * nights;
 
   return {
     isAvailable: true,
     totalAmount,
-    ratePerNight: roomRate, // Unit rate
-    surchargePerNight,
+    ratePerNight: totalNightlyRate,
+    surchargePerNight: 0,
     availableRooms: allowedStandardRooms,
     nights,
     pricingMode: 'nightly' as const,
