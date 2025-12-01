@@ -158,20 +158,22 @@ async function preBook(request) {
     const roomInventory = await db_1.db.roomInventory.findFirstOrThrow({
         where: { roomType: { equals: request.roomType, mode: 'insensitive' } }
     });
-    const { guestInfo, userId, ...restOfRequest } = request;
+    const { guestInfo, userId, adultCount, childCount } = request;
+    const bookingPayload = {
+        guestInfo: Object.assign(Object.assign({}, (guestInfo || {})), { adultCount, childCount }),
+        userId: userId || undefined,
+        checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
+        checkInTime: request.checkInTime,
+        checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
+        checkOutTime: request.checkOutTime,
+        roomCount: request.roomCount,
+        roomType: request.roomType,
+        totalAmount: availability.totalAmount,
+        roomInventoryId: roomInventory.roomId,
+        paymentStatus: client_1.BookingPaymentStatus.Pending,
+    };
     // Consider wrapping the create in a transaction if you later will immediately create payment order
-    const booking = await db_1.db.booking.create({
-        data: {
-            ...restOfRequest,
-            guestInfo,
-            userId,
-            checkInDate: new Date(`${request.checkInDate}T${request.checkInTime}`),
-            checkOutDate: new Date(`${request.checkOutDate}T${request.checkOutTime}`),
-            totalAmount: availability.totalAmount,
-            roomInventoryId: roomInventory.roomId,
-            paymentStatus: client_1.BookingPaymentStatus.Pending,
-        },
-    });
+    const booking = await db_1.db.booking.create({ data: bookingPayload });
     return { success: true, bookingId: booking.bookingId, totalAmount: booking.totalAmount };
 }
 // --- Create Order (Razorpay Integration) ---

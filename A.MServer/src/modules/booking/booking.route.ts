@@ -136,18 +136,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Get final booking details by reference number
-router.get('/:referenceNumber', async (req, res) => {
-  try {
-    const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
-    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found.' });
-    return res.status(200).json({ success: true, data: booking });
-  } catch (err: any) {
-    console.error('Get booking by reference error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to retrieve booking' });
-  }
-});
-
+// Get booking by Razorpay order id (must be before the generic reference route)
 router.get('/order/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
@@ -171,6 +160,18 @@ router.get('/order/:orderId', async (req, res) => {
       success: false,
       message: 'Failed to retrieve booking. Please try again later.'
     });
+  }
+});
+
+// Get final booking details by reference number (generic catch-all single segment)
+router.get('/:referenceNumber', async (req, res) => {
+  try {
+    const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
+    if (!booking) return res.status(404).json({ success: false, message: 'Booking not found.' });
+    return res.status(200).json({ success: true, data: booking });
+  } catch (err: any) {
+    console.error('Get booking by reference error:', err);
+    return res.status(500).json({ success: false, message: 'Failed to retrieve booking' });
   }
 });
 
