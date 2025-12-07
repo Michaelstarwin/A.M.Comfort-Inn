@@ -151,7 +151,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   if (err.name === "ZodError" || err.type === "validation") {
     return res.status(400).json({
       status: "error",
-      message: "Invalid input data",
+      message: `Invalid input data: ${err.message || JSON.stringify(err.errors)}`,
       errors: err.errors || err.message,
     });
   }
