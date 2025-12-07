@@ -92,7 +92,7 @@ const Booking = () => {
       }
 
       const options = {
-        key: config.RAZORPAY_KEY_ID,
+        key: "rzp_test_RokXble16ygfaW",
         amount: amount,
         currency: currency,
         name: "A.M. Comfort Inn",
