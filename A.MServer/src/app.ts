@@ -103,11 +103,23 @@ app.get("/api/admin/test", (req, res) => {
 });
 
 // --- API Routes ---
+app.use('/api/payment', paymentRoutes);
 app.use("/api/bookings", bookingRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/admin", adminRoutes);
-app.use('/api/payment', paymentRoutes);
 
+console.log('=== REGISTERED ROUTES ===');
+app._router.stack.forEach((middleware: any) => {
+  if (middleware.route) {
+    console.log(`${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
+  } else if (middleware.name === 'router') {
+    middleware.handle.stack.forEach((handler: any) => {
+      if (handler.route) {
+        console.log(`${Object.keys(handler.route.methods)} ${middleware.regexp} ${handler.route.path}`);
+      }
+    });
+  }
+});
 console.log("Admin routes mounted:", (adminRoutes as any).stack?.length || "Router check");
 
 // --- Routes debugger ---

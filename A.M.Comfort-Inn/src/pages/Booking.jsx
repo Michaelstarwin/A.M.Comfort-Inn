@@ -99,6 +99,9 @@ const Booking = () => {
         description: "Room Booking Payment",
         order_id: orderId,
         handler: async function (response) {
+          console.log('[Razorpay] Full Response:', response);
+          console.log('[Razorpay] Order ID:', response.razorpay_order_id);
+
           toast.loading("Verifying payment...");
           try {
             const verificationResponse = await bookingApi.verifyPayment({
@@ -107,31 +110,27 @@ const Booking = () => {
               razorpay_signature: response.razorpay_signature,
             });
 
+            console.log('[Razorpay] Verification Response:', verificationResponse);
             toast.dismiss();
+
             if (verificationResponse.success) {
-              toast.success("🎉 Payment Successful! Your booking is confirmed.", {
-                duration: 4000,
-                icon: '✅',
-              });
+              toast.success("🎉 Payment Successful! Your booking is confirmed.");
               setIsLoading(false);
 
-              // Force redirect to payment status page
-              console.log('Redirecting to payment status page...');
-              window.location.href = `/booking/payment-status?orderId=${orderId}&status=success`;
+              // Use the EXACT orderId from response
+              const orderIdToUse = response.razorpay_order_id;
+              console.log(`[Razorpay] Redirecting with orderId: ${orderIdToUse}`);
+
+              window.location.href = `/booking/payment-status?orderId=${orderIdToUse}&status=success`;
             } else {
               throw new Error("Payment verification failed");
             }
           } catch (error) {
             console.error("Payment verification failed:", error);
             toast.dismiss();
-            toast.error("❌ Payment verification failed. Please contact support.", {
-              duration: 5000,
-            });
+            toast.error("❌ Payment verification failed. Please contact support.");
             setIsLoading(false);
-            // Navigate to failure page
-            setTimeout(() => {
-              navigate(`/booking/payment-status?orderId=${orderId}&status=failed`);
-            }, 2000);
+            navigate(`/booking/payment-status?orderId=${response.razorpay_order_id}&status=failed`);
           }
         },
         prefill: {
