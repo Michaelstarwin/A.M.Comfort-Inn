@@ -164,6 +164,15 @@ const Booking = () => {
         }, 2000);
       });
 
+      // Save booking details for fallback UI in PaymentStatus
+      localStorage.setItem('pendingBookingDetails', JSON.stringify({
+        ...availabilityData,
+        ...guestData,
+        orderId: orderId,
+        amount: amount,
+        timestamp: Date.now()
+      }));
+
       razorpay.open();
       localStorage.setItem('lastBookingRef', JSON.stringify({ bookingId: orderId, timestamp: Date.now() }));
     } catch (error) {
