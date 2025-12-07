@@ -49,12 +49,17 @@ router.post('/verify', async (req, res) => {
     }
 });
 // Webhook Route
-router.post('/webhook', async (req, res) => {
+router.post('/webhook', express_1.default.raw({ type: 'application/json' }), async (req, res) => {
     try {
         const signature = (req.headers['x-razorpay-signature'] || '');
         if (!signature) {
             console.warn('[Webhook] No signature header - accepting in test mode');
         }
+        // req.rawBody is set by the global express.json({ verify: ... }) in app.ts
+        // OR by the express.raw logic here if it takes precedence.
+        // However, since app.ts mounts routes AFTER global middleware, global middleware runs first.
+        // If the Content-Type is application/json, global middleware parses it and sets req.rawBody.
+        // We should prefer req.rawBody.
         const rawBody = req.rawBody || req.body;
         // ✅ Always return 200 to Razorpay (so they don't retry endlessly)
         // Process webhook asynchronously

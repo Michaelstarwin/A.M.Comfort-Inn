@@ -118,16 +118,6 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
   }
 });
 
-router.post('/payment/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  try {
-    console.log("Razorpay webhook received and processed by payment service");
-    res.status(200).json({ status: 'success', message: 'Webhook processed by payment service' });
-  } catch (error: any) {
-    console.error('Webhook processing error:', error);
-    res.status(400).json({ status: 'error', message: error.message });
-  }
-});
-
 // ✅ CRITICAL: Put all specific routes BEFORE the generic catch-all routes
 
 // Get all bookings (list view)

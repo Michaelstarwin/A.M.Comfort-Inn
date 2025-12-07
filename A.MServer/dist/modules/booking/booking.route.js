@@ -133,16 +133,6 @@ router.post('/payment/create-order', (0, validate_middleware_1.validate)(booking
         return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
     }
 });
-router.post('/payment/razorpay-webhook', express_1.default.raw({ type: 'application/json' }), async (req, res) => {
-    try {
-        console.log("Razorpay webhook received and processed by payment service");
-        res.status(200).json({ status: 'success', message: 'Webhook processed by payment service' });
-    }
-    catch (error) {
-        console.error('Webhook processing error:', error);
-        res.status(400).json({ status: 'error', message: error.message });
-    }
-});
 // ✅ CRITICAL: Put all specific routes BEFORE the generic catch-all routes
 // Get all bookings (list view)
 router.get('/', async (req, res) => {
