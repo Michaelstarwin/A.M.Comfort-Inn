@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { bookingApi } from '../../utils/api';
 import { toast } from 'react-hot-toast';
-import { FaPrint, FaCheckCircle, FaTimesCircle, FaExclamationTriangle } from 'react-icons/fa';
+import { FaPrint, FaCheckCircle, FaTimesCircle, FaExclamationTriangle, FaClock } from 'react-icons/fa';
 
 const DetailItem = ({ label, value }) => (
   <div className="flex justify-between py-2 border-b border-gray-200">
@@ -15,28 +15,33 @@ export const PaymentStatus = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
-  console.log(orderId);
 
-  const status = searchParams.get('status');
-  console.log(status);
-
+  // Optimistic status from URL (set by Razorpay redirect)
+  const urlStatus = searchParams.get('status');
   const reason = searchParams.get('reason');
-  console.log(reason);
 
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [paymentStatus, setPaymentStatus] = useState(status || 'pending');
+
+  // Internal state to track what we display. 
+  // If urlStatus is 'success', start with 'verifying' instead of generic loading.
+  const [displayStatus, setDisplayStatus] = useState(
+    urlStatus === 'failed' ? 'failed' :
+      urlStatus === 'success' ? 'verifying' : 'loading'
+  );
+
   const ticketRef = useRef(null);
+  const retryCount = useRef(0);
+  const MAX_RETRIES = 10; // Stop after ~20-30 seconds
 
   useEffect(() => {
     let isMounted = true;
-    let pollInterval;
-    let timeoutTimer;
+    let pollTimeout;
 
     // 1. Immediate Failure Handling
-    if (status === 'failed') {
+    if (urlStatus === 'failed') {
       console.log('[PaymentStatus] URL indicates failure. Showing failed screen immediately.');
-      setPaymentStatus('failed');
+      setDisplayStatus('failed');
       setIsLoading(false);
       return;
     }
@@ -45,19 +50,16 @@ export const PaymentStatus = () => {
       if (!orderId) {
         if (isMounted) {
           setIsLoading(false);
-          setPaymentStatus('error');
-          toast.error('Order ID not found in URL. Please check your email.');
+          setDisplayStatus('error');
+          toast.error('Order ID not found in URL.');
         }
-        return true;
+        return true; // Stop polling
       }
 
       try {
-        console.log(`[PaymentStatus] 🔍 Fetching booking for orderId: ${orderId}`);
-        console.log(`[PaymentStatus] 🌐 API Base URL: ${import.meta.env.VITE_API_BASE_URL || 'default'}`);
+        console.log(`[PaymentStatus] 🔍 Fetching booking for orderId: ${orderId} (Attempt ${retryCount.current + 1}/${MAX_RETRIES})`);
 
         const response = await bookingApi.getBookingByOrderId(orderId);
-
-        console.log(`[PaymentStatus] 📦 Response:`, JSON.stringify(response, null, 2));
 
         if (!isMounted) return true;
 
@@ -65,80 +67,70 @@ export const PaymentStatus = () => {
           const bookingData = response.data;
           const bookingStatus = bookingData.paymentStatus?.toLowerCase();
 
-          console.log(`[PaymentStatus] ✅ Booking found! Status: ${bookingStatus}`);
+          console.log(`[PaymentStatus] ✅ Booking found! DB Status: ${bookingStatus}`);
 
           if (bookingStatus === 'success' || bookingStatus === 'confirmed') {
             setBooking(bookingData);
-            setPaymentStatus('success');
+            setDisplayStatus('success');
             setIsLoading(false);
-            toast.success('✅ Payment successful!');
-            return true;
-          } else if (bookingStatus === 'failed') {
+            toast.success('✅ Payment verified successfully!');
+            return true; // Stop polling
+          }
+
+          if (bookingStatus === 'failed') {
             setBooking(bookingData);
-            setPaymentStatus('failed');
+            setDisplayStatus('failed');
             setIsLoading(false);
             toast.error('❌ Payment failed.');
-            return true;
-          } else {
-            console.log(`[PaymentStatus] ⏳ Status is ${bookingStatus}, continuing to poll...`);
+            return true; // Stop polling
           }
-        } else {
-          console.warn('[PaymentStatus] ⚠️ No booking data in response');
+
+          // If status is still pending/created in DB, keep polling
+          console.log(`[PaymentStatus] ⏳ DB status is ${bookingStatus}, continuing to poll...`);
         }
       } catch (error) {
-        console.error('[PaymentStatus] ❌ Error:', error);
-        console.error('[PaymentStatus] Error details:', {
-          message: error.message,
-          statusCode: error.statusCode,
-          orderId: orderId
-        });
-
-        if (error.statusCode === 404) {
-          console.log('[PaymentStatus] 404 - Will retry...');
-        } else {
-          console.error('[PaymentStatus] Non-404 error, might be network issue');
-        }
+        console.warn(`[PaymentStatus] Attempt ${retryCount.current + 1} failed:`, error.message);
       }
-      return false;
-    };
 
-    const startPolling = async () => {
-      // Initial check
-      const done = await fetchBookingDetails();
-      if (done) return;
+      // Retry Logic
+      retryCount.current += 1;
 
-      // Poll every 2 seconds
-      pollInterval = setInterval(async () => {
-        const stop = await fetchBookingDetails();
-        if (stop) {
-          clearInterval(pollInterval);
-          clearTimeout(timeoutTimer);
-        }
-      }, 2000);
-
-      // Timeout after 45 seconds
-      timeoutTimer = setTimeout(() => {
-        if (isMounted && isLoading) {
-          clearInterval(pollInterval);
+      if (retryCount.current >= MAX_RETRIES) {
+        if (isMounted) {
           setIsLoading(false);
-          setPaymentStatus('timeout');
-          toast('⚠️ Taking longer than expected. Please check your email or contact support.', {
-            duration: 8000
-          });
+          // If we had a success signal from URL but backend didn't confirm in time,
+          // Show "Processing" state instead of "Error"
+          if (urlStatus === 'success') {
+            setDisplayStatus('processing');
+          } else {
+            setDisplayStatus('timeout');
+          }
         }
-      }, 45000);
+        return true; // Stop polling
+      }
+
+      return false; // Continue polling
     };
 
-    startPolling();
+    const runPolling = async () => {
+      const shouldStop = await fetchBookingDetails();
+      if (!shouldStop) {
+        // Exponential-ish backoff: 2s, 2s, 3s, 3s, 5s...
+        const delay = retryCount.current < 5 ? 2000 : 4000;
+        pollTimeout = setTimeout(runPolling, delay);
+      }
+    };
+
+    runPolling();
 
     return () => {
       isMounted = false;
-      clearInterval(pollInterval);
-      clearTimeout(timeoutTimer);
+      clearTimeout(pollTimeout);
     };
-  }, [orderId, status]);
+  }, [orderId, urlStatus]);
 
   const handlePrint = () => {
+    if (!ticketRef.current) return;
     const printContents = ticketRef.current.innerHTML;
     const originalContents = document.body.innerHTML;
     document.body.innerHTML = printContents;
@@ -147,84 +139,96 @@ export const PaymentStatus = () => {
     window.location.reload();
   };
 
-  if (isLoading) {
+  // --- RENDER STATES ---
+
+  if (isLoading || displayStatus === 'loading' || displayStatus === 'verifying') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 text-lg">Loading booking details...</p>
+        <div className="text-center p-8">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-6"></div>
+          <h2 className="text-xl font-semibold text-gray-800 mb-2">
+            {displayStatus === 'verifying' ? 'Verifying Payment...' : 'Loading Booking Details...'}
+          </h2>
+          <p className="text-gray-500 max-w-sm mx-auto">
+            Please wait while we confirm your booking with the payment gateway. Do not close this window.
+          </p>
         </div>
       </div>
     );
   }
 
-  // Payment Failed State
-  if (paymentStatus === 'failed') {
+  if (displayStatus === 'failed') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
         <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
-          <FaTimesCircle className="text-red-500 text-6xl mb-4 mx-auto animate-pulse" />
+          <FaTimesCircle className="text-red-500 text-6xl mb-4 mx-auto" />
           <h2 className="text-2xl font-bold mb-4 text-red-700">Payment Failed</h2>
           <p className="text-gray-600 mb-2">
             Unfortunately, your payment could not be processed.
           </p>
           {reason && (
-            <p className="text-sm text-gray-500 mb-6 italic">
+            <p className="text-sm text-gray-500 mb-6 italic bg-gray-100 p-2 rounded">
               Reason: {decodeURIComponent(reason)}
             </p>
           )}
-          <p className="text-gray-600 mb-6">
-            Please try again or contact support if the problem persists.
-          </p>
-          <div className="space-y-3">
-            <button
-              onClick={() => navigate('/booking')}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-300"
-            >
-              Try Again
-            </button>
-            <button
-              onClick={() => navigate('/')}
-              className="w-full bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-300"
-            >
-              Back to Home
-            </button>
-          </div>
+          <button
+            onClick={() => navigate('/booking')}
+            className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 mt-4"
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
   }
 
-  // Error State (no booking found)
-  if (paymentStatus === 'error' || !booking) {
+  // Graceful Timeout / Processing State
+  if (displayStatus === 'processing' || displayStatus === 'timeout') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
+        <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
+          <FaClock className="text-orange-500 text-6xl mb-4 mx-auto" />
+          <h2 className="text-2xl font-bold mb-4 text-gray-800">Processing Payment</h2>
+          <p className="text-gray-600 mb-6">
+            We received your payment signal, but your booking is still being finalized in our system.
+          </p>
+          <div className="bg-blue-50 p-4 rounded-lg mb-6 text-left">
+            <h3 className="font-semibold text-blue-800 mb-2">What happens next?</h3>
+            <ul className="text-sm text-blue-700 space-y-2 list-disc pl-4">
+              <li>Do not pay again.</li>
+              <li>Check your email inbox for the booking confirmation (it may take a few minutes).</li>
+              <li>Contact support if you don't receive it within 10 minutes.</li>
+            </ul>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full bg-gray-800 text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-700 transition duration-300"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (displayStatus === 'error') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
         <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
           <FaExclamationTriangle className="text-yellow-500 text-6xl mb-4 mx-auto" />
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Booking Not Found</h2>
           <p className="text-gray-600 mb-6">
-            We couldn't find your booking details. Please check your email for confirmation or contact support.
+            We couldn't retrieve your booking details.
           </p>
-          <div className="space-y-3">
-            <button
-              onClick={() => navigate('/booking')}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition duration-300"
-            >
-              Make a New Booking
-            </button>
-            <button
-              onClick={() => navigate('/')}
-              className="w-full bg-gray-300 text-gray-800 py-3 px-4 rounded-lg font-semibold hover:bg-gray-400 transition duration-300"
-            >
-              Back to Home
-            </button>
-          </div>
+          <button onClick={() => navigate('/')} className="text-blue-600 hover:underline">
+            Return Home
+          </button>
         </div>
       </div>
     );
   }
 
-  // Success State - Show Booking Confirmation
+  // --- SUCCESS STATE ---
   return (
     <div className="min-h-screen bg-gray-100 pt-28 pb-12 px-4">
       <div className="max-w-2xl mx-auto">
@@ -232,7 +236,7 @@ export const PaymentStatus = () => {
           <FaCheckCircle className="text-green-500 text-6xl mb-4 mx-auto animate-bounce" />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">✨ Booking Confirmed! ✨</h1>
           <p className="text-gray-600">Thank you for choosing A.M. Comfort Inn</p>
-          <p className="text-sm text-gray-500 mt-2">A confirmation email has been sent to your inbox</p>
+          <p className="text-sm text-gray-500 mt-2">Confirmation email has been sent.</p>
         </div>
 
         <div ref={ticketRef} className="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
@@ -240,43 +244,32 @@ export const PaymentStatus = () => {
             <h2 className="text-2xl font-bold text-blue-600">A.M. Comfort Inn</h2>
             <span className="text-sm font-semibold text-gray-700 bg-green-100 px-3 py-1 rounded-full">Confirmed</span>
           </div>
-          <div className="mt-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Details</h3>
-            <DetailItem label="Booking ID" value={booking.bookingId || 'N/A'} />
-            <DetailItem
-              label="Check-in"
-              value={`${new Date(booking.checkInDate).toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })} @ ${booking.checkInTime || '12:00 PM'}`}
-            />
-            <DetailItem
-              label="Check-out"
-              value={`${new Date(booking.checkOutDate).toLocaleDateString('en-IN', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric'
-              })} @ ${booking.checkOutTime || '11:00 AM'}`}
-            />
-            <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
-            <DetailItem label="Rooms Reserved" value={booking.roomCount || 1} />
-            <div className="flex justify-between py-3 mt-2 bg-green-50 px-3 rounded-lg">
-              <span className="text-lg font-bold text-gray-900">Total Amount Paid</span>
-              <span className="text-lg font-bold text-green-600">₹{(booking.totalAmount || 0).toLocaleString('en-IN')}</span>
-            </div>
-          </div>
-          <div className="mt-6 border-t pt-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-3">Guest Information</h3>
-            <DetailItem label="Full Name" value={booking.guestInfo?.fullName || 'N/A'} />
-            <DetailItem label="Email" value={booking.guestInfo?.email || 'N/A'} />
-            <DetailItem label="Phone" value={booking.guestInfo?.phone || 'N/A'} />
-          </div>
 
-          <div className="mt-6 border-t pt-4 bg-blue-50 p-4 rounded-lg">
-            <p className="text-sm text-gray-700">
-              <strong>Important:</strong> Please arrive at the check-in time. For any queries or changes,
-              please contact us at <span className="font-semibold">booking.amcinn@gmail.com</span>
+          {booking && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Details</h3>
+              <DetailItem label="Booking ID" value={booking.bookingId || 'N/A'} />
+              <DetailItem
+                label="Check-in"
+                value={booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString() : 'N/A'}
+              />
+              <DetailItem
+                label="Check-out"
+                value={booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString() : 'N/A'}
+              />
+              <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
+              <DetailItem label="Rooms" value={booking.roomCount || 1} />
+
+              <div className="flex justify-between py-3 mt-4 bg-green-50 px-3 rounded-lg border border-green-100">
+                <span className="text-lg font-bold text-gray-900">Total Paid</span>
+                <span className="text-lg font-bold text-green-600">₹{(booking.totalAmount || 0).toLocaleString('en-IN')}</span>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 border-t pt-4">
+            <p className="text-center text-gray-500 text-sm">
+              Please save this ticket or check your email for details.
             </p>
           </div>
         </div>
