@@ -20,16 +20,15 @@ const razorpayService = new RazorpayService();
 // --- Public Routes ---
 
 router.get('/availability/status', validate(availabilityStatusSchema), async (req, res) => {
-  // safe to assert non-null because validate(...) ensures these exist
   const { checkInDate, checkOutDate, checkInTime, checkOutTime } =
     req.query as Record<string, string | undefined>;
 
   try {
     const status = await BookingService.getAvailabilityStatus({
-      checkInDate: checkInDate!,   // non-null assertion — validated by zod
-      checkOutDate: checkOutDate!, // non-null assertion — validated by zod
-      checkInTime: checkInTime,    // optional
-      checkOutTime: checkOutTime,  // optional
+      checkInDate: checkInDate!,
+      checkOutDate: checkOutDate!,
+      checkInTime: checkInTime,
+      checkOutTime: checkOutTime,
     });
 
     return res.status(200).json({ success: true, data: status });
@@ -39,7 +38,6 @@ router.get('/availability/status', validate(availabilityStatusSchema), async (re
   }
 });
 
-// FR 3.1: Check room availability
 router.post('/check-availability', validate(checkAvailabilitySchema), async (req, res) => {
   const result = await BookingService.checkAvailability(req.body);
   if (!result.isAvailable) {
@@ -48,7 +46,6 @@ router.post('/check-availability', validate(checkAvailabilitySchema), async (req
   res.status(200).json({ success: true, message: 'Rooms are available.', data: result });
 });
 
-// FR 3.2: Guest Information and Pre-Booking
 router.post('/pre-book', validate(preBookSchema), async (req, res) => {
   try {
     const result = await BookingService.preBook(req.body);
@@ -72,7 +69,6 @@ router.post('/pre-book', validate(preBookSchema), async (req, res) => {
   }
 });
 
-// FR 3.3: Razorpay Payment Gateway Integration
 router.post('/payment/create-order', validate(createOrderSchema), async (req, res) => {
   try {
     const bookingData: any = await BookingService.createOrder(req.body);
@@ -81,7 +77,6 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
       return res.status(400).json({ success: false, message: bookingData?.message || 'Invalid booking for payment' });
     }
 
-    // Create Razorpay order
     const result = await razorpayService.createOrder({
       bookingId: bookingData.bookingId,
       amount: bookingData.amount,
@@ -96,8 +91,6 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
       return res.status(400).json({ success: false, message: result?.message || 'Failed to create payment order', detail: result });
     }
 
-    // ✅ CRITICAL FIX: Ensure order is linked BEFORE returning to frontend
-    // The razorpay service already does this internally, but let's verify it succeeded
     const linkedBooking = await db.booking.findUnique({
       where: { bookingId: bookingData.bookingId },
       select: { paymentOrderId: true }
@@ -134,6 +127,19 @@ router.post('/payment/razorpay-webhook', express.raw({ type: 'application/json' 
   }
 });
 
+// ✅ CRITICAL: Put all specific routes BEFORE the generic catch-all routes
+
+// Get all bookings (list view)
+router.get('/', async (req, res) => {
+  try {
+    const bookings = await BookingService.getAllBookings();
+    res.status(200).json({ success: true, data: bookings });
+  } catch (error: any) {
+    res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: error.message });
+  }
+});
+
+// ✅ SPECIFIC ROUTE: Get booking by Razorpay order ID (MUST be before /:referenceNumber)
 router.get('/order/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
@@ -159,7 +165,8 @@ router.get('/order/:orderId', async (req, res) => {
     });
   }
 });
-// Fix for Frontend calling wrong endpoint (backward compatibility/alias)
+
+// ✅ SPECIFIC ROUTE: Backward compatibility alias (MUST be before /:referenceNumber)
 router.get('/payment-status/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
@@ -169,14 +176,12 @@ router.get('/payment-status/:orderId', async (req, res) => {
 
     if (!booking) {
       console.warn(`[GET /payment-status/:orderId] ❌ No booking found in DB for orderId: ${orderId}`);
-      // Log all recent bookings or check if orderId exists in raw query if possible (optional)
       return res.status(404).json({
         success: false,
         message: 'Booking not found. Please check your email for confirmation or contact support.'
       });
     }
 
-    // Return successfully (just mapping to same response structure)
     return res.status(200).json({ success: true, data: booking });
   } catch (err: any) {
     console.error('[GET /payment-status/:orderId] Error:', err);
@@ -187,23 +192,7 @@ router.get('/payment-status/:orderId', async (req, res) => {
   }
 });
 
-// FR 3.4: Payment Confirmation via Razorpay Webhook
-// NOTE: Razorpay webhooks are handled in /src/modules/payment/payment.route.ts
-// This route is kept for backwards compatibility and logging
-
-// Public: Get all bookings (optional)
-router.get('/', async (req, res) => {
-  try {
-    const bookings = await BookingService.getAllBookings(); // Service call
-    res.status(200).json({ success: true, data: bookings });
-  } catch (error: any) {
-    res.status(500).json({ success: false, message: 'Failed to fetch bookings', error: error.message });
-  }
-});
-
-// Get booking by Razorpay order id (must be before the generic reference route)
-
-// Get final booking details by reference number (generic catch-all single segment)
+// ⚠️ CATCH-ALL ROUTE: This MUST be LAST (it matches ANY single segment)
 router.get('/:referenceNumber', async (req, res) => {
   try {
     const booking = await BookingService.getBookingByReference(req.params.referenceNumber);
