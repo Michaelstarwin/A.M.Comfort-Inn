@@ -14,29 +14,33 @@ const timeString = z.string().regex(timeRegex, 'Invalid time format. Use HH:MM:S
 // helpers
 const toDate = (dateStr: string, timeStr: string) => new Date(`${dateStr}T${timeStr}`);
 
+// Base schema object (without refinements) allows extension
+const baseBookingFields = z.object({
+  checkInDate: isoDateString,
+  checkInTime: timeString,
+  checkOutDate: isoDateString,
+  checkOutTime: timeString,
+  roomType: z.string().min(1, 'Room type is required.'),
+  roomCount: z.number().int().positive('Room count must be a positive integer.'),
+  adultCount: z.number().int().min(1, 'At least 1 adult is required.'),
+  childCount: z.number().int().min(0).default(0),
+});
+
+// Refinement logic
+const dateValidation = (data: any, ctx: z.RefinementCtx) => {
+  const start = toDate(data.checkInDate, data.checkInTime);
+  const end = toDate(data.checkOutDate, data.checkOutTime);
+  if (!(start < end)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['checkOutDate'],
+      message: 'Check-out date and time must be after check-in date and time.',
+    });
+  }
+};
+
 export const checkAvailabilitySchema = z.object({
-  body: z
-    .object({
-      checkInDate: isoDateString,
-      checkInTime: timeString,
-      checkOutDate: isoDateString,
-      checkOutTime: timeString,
-      roomType: z.string().min(1, 'Room type is required.'),
-      roomCount: z.number().int().positive('Room count must be a positive integer.'),
-      adultCount: z.number().int().min(1, 'At least 1 adult is required.'),
-      childCount: z.number().int().min(0).default(0),
-    })
-    .superRefine((data, ctx) => {
-      const start = toDate(data.checkInDate, data.checkInTime);
-      const end = toDate(data.checkOutDate, data.checkOutTime);
-      if (!(start < end)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['checkOutDate'],
-          message: 'Check-out date and time must be after check-in date and time.',
-        });
-      }
-    }),
+  body: baseBookingFields.superRefine(dateValidation),
 });
 
 export type CheckAvailabilityRequest = z.infer<typeof checkAvailabilitySchema.shape.body>;
@@ -66,17 +70,19 @@ export const availabilityStatusSchema = z.object({
 
 export type AvailabilityStatusRequest = z.infer<typeof availabilityStatusSchema.shape.query>;
 
-// Pre-book: extend the validated body with guest and optional userId
+// Pre-book: extend the BASE object, then apply refinement
 export const preBookSchema = z.object({
-  body: checkAvailabilitySchema.shape.body.extend({
-    guestInfo: z.object({
-      fullName: z.string().min(2, 'Full name is required.'),
-      email: z.string().email('Invalid email address.'),
-      phone: z.string().min(10, 'A valid phone number is required.'),
-      country: z.string().min(2, 'Country is required.'),
-    }),
-    userId: z.string().cuid().optional(),
-  }),
+  body: baseBookingFields
+    .extend({
+      guestInfo: z.object({
+        fullName: z.string().min(2, 'Full name is required.'),
+        email: z.string().email('Invalid email address.'),
+        phone: z.string().min(10, 'A valid phone number is required.'),
+        country: z.string().min(2, 'Country is required.'),
+      }),
+      userId: z.string().cuid().optional(),
+    })
+    .superRefine(dateValidation),
 });
 
 export type PreBookRequest = z.infer<typeof preBookSchema.shape.body>;
