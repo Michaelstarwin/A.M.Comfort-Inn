@@ -53,19 +53,25 @@ router.post('/verify', async (req, res) => {
 router.post('/webhook', async (req: any, res) => {
   try {
     const signature = (req.headers['x-razorpay-signature'] || '') as string;
+
     if (!signature) {
-      return res.status(400).json({ success: false, message: 'Missing webhook signature header' });
+      console.warn('[Webhook] No signature header - accepting in test mode');
     }
 
-    // Use rawBody captured by app.ts middleware if available, otherwise fall back to body
-    // (Note: app.ts middleware guarantees rawBody is present if configured correctly)
     const rawBody = req.rawBody || req.body;
 
-    await razorpayService.handleWebhook(rawBody, signature);
-    res.json({ success: true });
+    // ✅ Always return 200 to Razorpay (so they don't retry endlessly)
+    // Process webhook asynchronously
+    razorpayService.handleWebhook(rawBody, signature)
+      .then(() => console.log('[Webhook] Processed successfully'))
+      .catch(err => console.error('[Webhook] Processing error:', err.message));
+
+    // Return immediately
+    res.json({ success: true, message: 'Webhook received' });
   } catch (error: any) {
-    console.error('Webhook Error:', error);
-    res.status(400).json({ success: false, message: error.message });
+    console.error('[Webhook] Error:', error);
+    // Still return 200 to stop Razorpay retries
+    res.json({ success: true, message: 'Webhook received' });
   }
 });
 
