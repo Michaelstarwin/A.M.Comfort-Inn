@@ -123,6 +123,17 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
     return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
   }
 });
+
+router.post('/payment/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  try {
+    console.log("Razorpay webhook received and processed by payment service");
+    res.status(200).json({ status: 'success', message: 'Webhook processed by payment service' });
+  } catch (error: any) {
+    console.error('Webhook processing error:', error);
+    res.status(400).json({ status: 'error', message: error.message });
+  }
+});
+
 router.get('/order/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
@@ -179,15 +190,6 @@ router.get('/payment-status/:orderId', async (req, res) => {
 // FR 3.4: Payment Confirmation via Razorpay Webhook
 // NOTE: Razorpay webhooks are handled in /src/modules/payment/payment.route.ts
 // This route is kept for backwards compatibility and logging
-router.post('/payment/razorpay-webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  try {
-    console.log("Razorpay webhook received and processed by payment service");
-    res.status(200).json({ status: 'success', message: 'Webhook processed by payment service' });
-  } catch (error: any) {
-    console.error('Webhook processing error:', error);
-    res.status(400).json({ status: 'error', message: error.message });
-  }
-});
 
 // Public: Get all bookings (optional)
 router.get('/', async (req, res) => {

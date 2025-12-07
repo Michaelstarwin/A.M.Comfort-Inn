@@ -41,7 +41,7 @@ export class RazorpayService {
     try {
       const { bookingId, amount, currency = 'INR', notes = {} } = request;
 
-      // 1. Verify booking
+      // 1. Verify booking exists
       const existingBooking = await db.booking.findUnique({
         where: { bookingId },
         select: { paymentStatus: true, paymentOrderId: true }
@@ -57,7 +57,7 @@ export class RazorpayService {
 
       // ✅ If order already exists, return it (idempotency)
       if (existingBooking.paymentOrderId) {
-        console.log(`Order already exists for booking ${bookingId}: ${existingBooking.paymentOrderId}`);
+        console.log(`✅ Order already exists for booking ${bookingId}: ${existingBooking.paymentOrderId}`);
         const razor = this.ensureClient();
         const existingOrder = await razor.orders.fetch(existingBooking.paymentOrderId);
         return {
@@ -74,18 +74,19 @@ export class RazorpayService {
       const razor = this.ensureClient();
       const amountInPaise = Math.round(amount * 100);
 
+      // 2. ✅ Create order with bookingId in notes
       const order = await razor.orders.create({
         amount: amountInPaise,
         currency,
         receipt: `booking_${bookingId}`,
-        notes: { bookingId, ...notes },
+        notes: { bookingId, ...notes }, // ✅ CRITICAL: Store bookingId in notes
         payment_capture: true
       }) as any;
 
       console.log(`✅ Razorpay order created: ${order.id} for booking: ${bookingId}`);
 
-      // 2. ✅ ATOMICALLY update booking with orderId
-      const updatedBooking = await db.booking.update({
+      // 3. ✅ IMMEDIATELY link order to booking in DB (ATOMIC)
+      await db.booking.update({
         where: { bookingId },
         data: {
           paymentOrderId: order.id,
@@ -94,7 +95,18 @@ export class RazorpayService {
         }
       });
 
-      console.log(`✅ Booking ${bookingId} linked to order ${order.id}`);
+      console.log(`✅ Order ${order.id} linked to booking ${bookingId} in database`);
+
+      // 4. ✅ VERIFY the link was successful before returning
+      const verifyLink = await db.booking.findUnique({
+        where: { bookingId },
+        select: { paymentOrderId: true }
+      });
+
+      if (verifyLink?.paymentOrderId !== order.id) {
+        console.error('❌ CRITICAL: Order linking verification failed!');
+        throw new Error('Order created but database linking failed');
+      }
 
       return {
         success: true,
@@ -106,8 +118,12 @@ export class RazorpayService {
         }
       };
     } catch (err: any) {
-      console.error('Razorpay order creation failed:', err);
-      return { success: false, message: err.message || 'Failed to create payment order', detail: err };
+      console.error('❌ Razorpay order creation failed:', err);
+      return {
+        success: false,
+        message: err.message || 'Failed to create payment order',
+        detail: err
+      };
     }
   }
 

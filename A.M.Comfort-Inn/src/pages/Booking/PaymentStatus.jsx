@@ -48,12 +48,16 @@ export const PaymentStatus = () => {
           setPaymentStatus('error');
           toast.error('Order ID not found in URL. Please check your email.');
         }
-        return true; // Stop polling
+        return true;
       }
 
       try {
-        console.log(`[PaymentStatus] Fetching booking for orderId: ${orderId}`);
+        console.log(`[PaymentStatus] 🔍 Fetching booking for orderId: ${orderId}`);
+        console.log(`[PaymentStatus] 🌐 API Base URL: ${import.meta.env.VITE_API_BASE_URL || 'default'}`);
+
         const response = await bookingApi.getBookingByOrderId(orderId);
+
+        console.log(`[PaymentStatus] 📦 Response:`, JSON.stringify(response, null, 2));
 
         if (!isMounted) return true;
 
@@ -61,34 +65,41 @@ export const PaymentStatus = () => {
           const bookingData = response.data;
           const bookingStatus = bookingData.paymentStatus?.toLowerCase();
 
-          console.log('[PaymentStatus] Status:', bookingStatus);
+          console.log(`[PaymentStatus] ✅ Booking found! Status: ${bookingStatus}`);
 
           if (bookingStatus === 'success' || bookingStatus === 'confirmed') {
             setBooking(bookingData);
             setPaymentStatus('success');
             setIsLoading(false);
             toast.success('✅ Payment successful!');
-            return true; // Stop polling
+            return true;
           } else if (bookingStatus === 'failed') {
             setBooking(bookingData);
             setPaymentStatus('failed');
             setIsLoading(false);
             toast.error('❌ Payment failed.');
-            return true; // Stop polling
+            return true;
+          } else {
+            console.log(`[PaymentStatus] ⏳ Status is ${bookingStatus}, continuing to poll...`);
           }
-          // If pending, continue polling
         } else {
-          console.warn('[PaymentStatus] No booking data in response');
+          console.warn('[PaymentStatus] ⚠️ No booking data in response');
         }
       } catch (error) {
-        console.warn('[PaymentStatus] Polling error:', error.message);
+        console.error('[PaymentStatus] ❌ Error:', error);
+        console.error('[PaymentStatus] Error details:', {
+          message: error.message,
+          statusCode: error.statusCode,
+          orderId: orderId
+        });
 
-        // ✅ If 404, log it but continue polling (webhook might be slow)
         if (error.statusCode === 404) {
-          console.log('[PaymentStatus] 404 - Booking not found yet, will retry...');
+          console.log('[PaymentStatus] 404 - Will retry...');
+        } else {
+          console.error('[PaymentStatus] Non-404 error, might be network issue');
         }
       }
-      return false; // Continue polling
+      return false;
     };
 
     const startPolling = async () => {
