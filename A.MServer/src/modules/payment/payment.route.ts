@@ -44,6 +44,7 @@ router.post('/verify', async (req, res) => {
     }
 
     // 3. EXECUTE: Call the service
+    console.log("3. Calling razorpayService.verifyPayment...");
     const result = await razorpayService.verifyPayment(
       paymentId,
       orderId,
@@ -51,14 +52,28 @@ router.post('/verify', async (req, res) => {
     );
 
     console.log("--- VERIFICATION SUCCESS ---");
+    console.log("Result:", JSON.stringify(result, null, 2));
     res.json(result);
 
   } catch (error: any) {
     console.error('--- VERIFICATION FAILED ---');
     console.error('Error Message:', error.message);
+    if (error.stack) console.error('Stack:', error.stack);
+
+    // Log what was actually received to debug if keys were missing
+    console.error('Failed Request Body:', JSON.stringify(req.body, null, 2));
+
     res.status(400).json({
       success: false,
-      message: error.message || "Payment Verification Failed"
+      message: error.message || "Payment Verification Failed",
+      debug_info: {
+        received: {
+          paymentId: req.body.razorpay_payment_id || req.body.paymentId,
+          orderId: req.body.razorpay_order_id || req.body.orderId,
+          signature: req.body.razorpay_signature ? 'PRESENT' : 'MISSING'
+        },
+        error: error.message
+      }
     });
   }
 });

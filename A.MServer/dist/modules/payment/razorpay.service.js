@@ -34,9 +34,23 @@ class RazorpayService {
     async createOrder(request) {
         try {
             const { bookingId, amount, currency = 'INR', notes = {} } = request;
+            // 1. Safety Check: Verify booking status first
+            const existingBooking = await db_1.db.booking.findUnique({
+                where: { bookingId },
+                select: { paymentStatus: true }
+            });
+            if (!existingBooking) {
+                return { success: false, message: 'Booking not found.' };
+            }
+            if (existingBooking.paymentStatus === client_1.BookingPaymentStatus.Success) {
+                return { success: false, message: 'Booking is already paid. Cannot create new order.' };
+            }
             const razor = this.ensureClient();
+            // 2. Currency Conversion: Rupees -> Paise
+            // Razorpay expects amount in smallest currency unit (paise for INR)
+            const amountInPaise = Math.round(amount * 100);
             const order = await razor.orders.create({
-                amount: Math.round(amount * 100), // paise
+                amount: amountInPaise,
                 currency,
                 receipt: `booking_${bookingId}`,
                 notes: { bookingId, ...notes },
@@ -112,22 +126,26 @@ class RazorpayService {
         }
     }
     /**
-     * handleWebhook expects rawBodyString (exact JSON string used by Razorpay to sign).
-     * If you supply a Buffer or object, ensure you pass JSON.stringify(originalObject) or buffer.toString()
+     * handleWebhook expects rawBody (Buffer) or string.
+     * We use the raw bytes for signature verification to avoid parsing issues.
      */
-    async handleWebhook(rawBodyString, signature) {
+    async handleWebhook(rawBody, signature) {
         if (!this.keySecret)
             throw new Error('Razorpay webhook secret not configured');
+        // Ensure we have a string or buffer for verification
+        const bodyForVerification = Buffer.isBuffer(rawBody) ? rawBody : JSON.stringify(rawBody);
         try {
             const expectedSignature = crypto_1.default
                 .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
-                .update(rawBodyString)
+                .update(bodyForVerification)
                 .digest('hex');
             if (expectedSignature !== signature) {
                 throw new Error('Invalid webhook signature');
             }
-            const payload = JSON.parse(rawBodyString);
+            // Parse the body if it's a buffer
+            const payload = Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString('utf8')) : rawBody;
             const { event, payload: eventPayload } = payload;
+            console.log(`[Razorpay Webhook] Received event: ${event}`);
             switch (event) {
                 case 'payment.captured':
                     await this.handlePaymentCaptured(eventPayload.payment.entity);
@@ -147,18 +165,31 @@ class RazorpayService {
     }
     async handlePaymentCaptured(payment) {
         const razor = this.ensureClient();
-        const order = await razor.orders.fetch(payment.order_id);
-        const bookingId = order.notes?.bookingId;
-        if (!bookingId)
-            throw new Error('Booking ID not found in order notes');
+        // 1. Fetch order to get bookingId from notes
+        // (Ideally, payment entity has notes too, but order notes are more reliable if payment notes were missed)
+        let bookingId = payment.notes?.bookingId;
+        if (!bookingId) {
+            const order = await razor.orders.fetch(payment.order_id);
+            bookingId = order.notes?.bookingId;
+        }
+        if (!bookingId) {
+            console.error(`[Webhook] Booking ID missing for payment ${payment.id}`);
+            return; // Can't do anything without booking ID
+        }
+        console.log(`[Webhook] Processing payment capture for Booking: ${bookingId}, Payment: ${payment.id}`);
+        // 2. Idempotency & Update
         await markBookingAsPaid(bookingId, payment.id);
     }
     async handlePaymentFailed(payment) {
-        const razor = this.ensureClient();
-        const order = await razor.orders.fetch(payment.order_id);
-        const bookingId = order.notes?.bookingId;
+        let bookingId = payment.notes?.bookingId;
+        if (!bookingId) {
+            const razor = this.ensureClient();
+            const order = await razor.orders.fetch(payment.order_id);
+            bookingId = order.notes?.bookingId;
+        }
         if (!bookingId)
-            throw new Error('Booking ID not found in order notes');
+            return;
+        console.log(`[Webhook] Payment failed for Booking: ${bookingId}`);
         await db_1.db.booking.update({
             where: { bookingId },
             data: {
@@ -203,9 +234,10 @@ async function sendConfirmationEmail(booking) {
     const guestInfo = booking.guestInfo;
     const recipient = guestInfo?.email;
     if (!recipient) {
-        console.warn(`Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
+        console.warn(`[Razorpay Service] Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
         return;
     }
+    console.log(`[Razorpay Service] Preparing to send confirmation email to ${recipient} for booking ${booking.bookingId}`);
     const bookingDetails = {
         bookingId: booking.bookingId,
         checkInDate: booking.checkInDate.toISOString().split('T')[0],
@@ -219,9 +251,10 @@ async function sendConfirmationEmail(booking) {
     };
     try {
         await (0, sendEmail_1.sendBookingConfirmationEmail)(recipient, bookingDetails);
+        console.log(`[Razorpay Service] Confirmation email sent successfully for booking ${booking.bookingId}`);
     }
     catch (error) {
-        console.error('Booking confirmation email failed:', error);
+        console.error(`[Razorpay Service] Booking confirmation email failed for booking ${booking.bookingId}:`, error);
     }
 }
 //# sourceMappingURL=razorpay.service.js.map

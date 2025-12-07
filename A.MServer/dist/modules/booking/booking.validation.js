@@ -21,6 +21,8 @@ exports.checkAvailabilitySchema = zod_1.z.object({
         checkOutTime: timeString,
         roomType: zod_1.z.string().min(1, 'Room type is required.'),
         roomCount: zod_1.z.number().int().positive('Room count must be a positive integer.'),
+        adultCount: zod_1.z.number().int().min(1, 'At least 1 adult is required.'),
+        childCount: zod_1.z.number().int().min(0).default(0),
     })
         .superRefine((data, ctx) => {
         const start = toDate(data.checkInDate, data.checkInTime);

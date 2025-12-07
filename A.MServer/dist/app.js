@@ -7,6 +7,7 @@ const express_1 = __importDefault(require("express"));
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
 const cors_1 = __importDefault(require("cors"));
+require("dotenv/config");
 // Import routes
 const booking_route_1 = __importDefault(require("./modules/booking/booking.route"));
 const transaction_route_1 = __importDefault(require("./modules/transaction/transaction.route"));
@@ -22,35 +23,65 @@ const port = Number(process.env.PORT) || 7700;
 // CORS
 const allowedOrigins = [
     "https://www.amcinn.in",
+    "https://amcinn.in",
     "http://localhost:5173", // Vite dev server
     "http://127.0.0.1:5173", // Alternative localhost
+    "http://localhost:3000", // Create React App default
 ];
 app.use((0, cors_1.default)({
     origin: (origin, callback) => {
-        if (!origin)
-            return callback(null, true); // allow server-to-server, curl, Postman
-        if (allowedOrigins.includes(origin))
+        // Allow requests with no origin (like mobile apps, Postman, or server-to-server)
+        if (!origin) {
+            console.log('[CORS] Request with no origin - allowing');
             return callback(null, true);
-        return callback(new Error('Not allowed by CORS'));
+        }
+        if (allowedOrigins.includes(origin)) {
+            console.log(`[CORS] Allowed origin: ${origin}`);
+            return callback(null, true);
+        }
+        // Check if it's a variation of allowed origins (http vs https, with/without www)
+        const originUrl = new URL(origin);
+        const isAllowedDomain = allowedOrigins.some(allowed => {
+            try {
+                const allowedUrl = new URL(allowed);
+                return originUrl.hostname === allowedUrl.hostname ||
+                    originUrl.hostname === `www.${allowedUrl.hostname}` ||
+                    `www.${originUrl.hostname}` === allowedUrl.hostname;
+            }
+            catch {
+                return false;
+            }
+        });
+        if (isAllowedDomain) {
+            console.log(`[CORS] Allowed domain variation: ${origin}`);
+            return callback(null, true);
+        }
+        console.warn(`[CORS] BLOCKED origin: ${origin}`);
+        console.warn(`[CORS] Allowed origins are: ${allowedOrigins.join(', ')}`);
+        return callback(new Error(`CORS policy: Origin ${origin} is not allowed`));
     },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     credentials: true,
-    // include your custom header here:
     allowedHeaders: [
         'Content-Type',
         'Authorization',
         'X-Requested-With',
         'Accept',
-        'X-User-Id' // <--- add this
+        'X-User-Id',
+        'x-rtb-fingerprint-id' // Allow browser fingerprinting headers
     ],
-    // optionally expose specific response headers to browser (if you need)
     exposedHeaders: ['Content-Length', 'X-Response-Time'],
     maxAge: 600
 }));
 // Pre-flight
 app.options("*", (req, res) => res.sendStatus(204));
 // Body parsers (MUST be before routes)
-app.use(express_1.default.json());
+// Body parsers (MUST be before routes)
+app.use(express_1.default.json({
+    verify: (req, res, buf) => {
+        req.rawBody = buf;
+    }
+}));
 app.use(express_1.default.urlencoded({ extended: true }));
 // Express configuration
 app.set("host", host);

@@ -120,14 +120,39 @@ router.post('/payment/create-order', (0, validate_middleware_1.validate)(booking
         }
         catch (dbErr) {
             // handle unique constraint gracefully if needed
-            console.error('Failed to link order to booking:', dbErr);
-            // still return order info (or decide to rollback)
+            console.error('CRITICAL: Failed to link order to booking:', dbErr);
+            // Return 500 because if we don't link, verification will fail 100% of the time
+            return res.status(500).json({ success: false, message: 'Failed to initialize payment link. Please try again.' });
         }
         return res.status(200).json({ success: true, message: 'Payment order created.', data: result.data });
     }
     catch (error) {
         console.error('Create-order route error:', error);
         return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
+    }
+});
+// Fix for Frontend calling wrong endpoint (backward compatibility/alias)
+router.get('/payment-status/:orderId', async (req, res) => {
+    try {
+        const orderId = req.params.orderId;
+        console.log(`[GET /payment-status/:orderId] Fetching booking for orderId: ${orderId}`);
+        const booking = await BookingService.getBookingByOrderId(orderId);
+        if (!booking) {
+            console.warn(`[GET /payment-status/:orderId] No booking found for orderId: ${orderId}`);
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found. Please check your email for confirmation or contact support.'
+            });
+        }
+        // Return successfully (just mapping to same response structure)
+        return res.status(200).json({ success: true, data: booking });
+    }
+    catch (err) {
+        console.error('[GET /payment-status/:orderId] Error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve booking. Please try again later.'
+        });
     }
 });
 // FR 3.4: Payment Confirmation via Razorpay Webhook
@@ -156,18 +181,28 @@ router.get('/', async (req, res) => {
 // Get booking by Razorpay order id (must be before the generic reference route)
 router.get('/order/:orderId', async (req, res) => {
     try {
-        const booking = await BookingService.getBookingByOrderId(req.params.orderId);
-        if (!booking)
-            return res.status(404).json({ success: false, message: 'Booking not found.' });
+        const orderId = req.params.orderId;
+        console.log(`[GET /order/:orderId] Fetching booking for orderId: ${orderId}`);
+        const booking = await BookingService.getBookingByOrderId(orderId);
+        if (!booking) {
+            console.warn(`[GET /order/:orderId] No booking found for orderId: ${orderId}`);
+            return res.status(404).json({
+                success: false,
+                message: 'Booking not found. Please check your email for confirmation or contact support.'
+            });
+        }
+        console.log(`[GET /order/:orderId] Successfully retrieved booking: ${booking.bookingId}`);
         return res.status(200).json({ success: true, data: booking });
     }
     catch (err) {
-        console.error('Get booking by orderId error:', err);
-        return res.status(500).json({ success: false, message: 'Failed to retrieve booking' });
+        console.error('[GET /order/:orderId] Error:', err);
+        return res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve booking. Please try again later.'
+        });
     }
 });
-
-// Get final booking details by reference number
+// Get final booking details by reference number (generic catch-all single segment)
 router.get('/:referenceNumber', async (req, res) => {
     try {
         const booking = await BookingService.getBookingByReference(req.params.referenceNumber);

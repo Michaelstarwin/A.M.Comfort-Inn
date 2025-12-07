@@ -123,7 +123,8 @@ router.get('/payment-status/:orderId', async (req, res) => {
     const booking = await BookingService.getBookingByOrderId(orderId);
 
     if (!booking) {
-      console.warn(`[GET /payment-status/:orderId] No booking found for orderId: ${orderId}`);
+      console.warn(`[GET /payment-status/:orderId] ❌ No booking found in DB for orderId: ${orderId}`);
+      // Log all recent bookings or check if orderId exists in raw query if possible (optional)
       return res.status(404).json({
         success: false,
         message: 'Booking not found. Please check your email for confirmation or contact support.'

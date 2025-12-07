@@ -33,27 +33,35 @@ export const PaymentStatus = () => {
     let pollInterval;
     let timeoutTimer;
 
+    // 1. Immediate Failure Handling (No need to poll if URL says active failure)
+    if (status === 'failed') {
+      console.log('[PaymentStatus] URL indicates failure. Showing failed screen immediately.');
+      setPaymentStatus('failed');
+      setIsLoading(false);
+      return;
+    }
+
     const fetchBookingDetails = async () => {
       if (!orderId) {
         if (isMounted) {
           setIsLoading(false);
           setPaymentStatus('error');
-          toast.error('Booking reference not found.');
+          toast.error('Booking reference not found in URL.');
         }
-        return;
+        return true; // Stop polling
       }
 
       try {
         console.log(`[PaymentStatus] Polling booking for orderId: ${orderId}`);
         const response = await bookingApi.getBookingByOrderId(orderId);
 
-        if (!isMounted) return;
+        if (!isMounted) return true;
 
         if (response && response.success && response.data) {
           const bookingData = response.data;
           const bookingStatus = bookingData.paymentStatus?.toLowerCase();
 
-          console.log('[PaymentStatus] Status:', bookingStatus);
+          console.log('[PaymentStatus] Retrieved Status:', bookingStatus);
 
           if (bookingStatus === 'success' || bookingStatus === 'confirmed') {
             setBooking(bookingData);
@@ -71,8 +79,9 @@ export const PaymentStatus = () => {
           // If pending, continue polling
         }
       } catch (error) {
-        console.error('[PaymentStatus] Error polling:', error);
-        // Don't stop polling on transient errors, just log
+        console.warn('[PaymentStatus] Error polling (will retry):', error.message);
+        // If 404, it might mean the webhook/server is slow to link the order. 
+        // We DO NOT fail immediately on 404 if we expect a success.
       }
       return false; // Continue polling
     };
@@ -91,15 +100,18 @@ export const PaymentStatus = () => {
         }
       }, 2000);
 
-      // Stop after 15 seconds
+      // Stop after 30 seconds (increased from 15s to allow for slower webhooks or network)
       timeoutTimer = setTimeout(() => {
         if (isMounted && isLoading) {
           clearInterval(pollInterval);
           setIsLoading(false);
-          setPaymentStatus('timeout'); // You might want to handle this state specifically or show 'pending' with a message
-          toast('Payment verification timed out. Please check your email.', { icon: '⚠️' });
+          // If we timed out but started with 'success' status in URL (if applicable) or just expect it, 
+          // we might want to show a softer error or just the 'not found' state.
+          // For now, let's set to timeout.
+          setPaymentStatus('timeout');
+          toast('Payment verification timed out. Please check your email or contact support.', { icon: '⚠️' });
         }
-      }, 15000);
+      }, 30000);
     };
 
     startPolling();
@@ -109,7 +121,7 @@ export const PaymentStatus = () => {
       clearInterval(pollInterval);
       clearTimeout(timeoutTimer);
     };
-  }, [orderId]);
+  }, [orderId, status]);
 
   const handlePrint = () => {
     const printContents = ticketRef.current.innerHTML;

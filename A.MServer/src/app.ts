@@ -73,7 +73,7 @@ app.use(cors({
     'X-User-Id',
     'x-rtb-fingerprint-id'  // Allow browser fingerprinting headers
   ],
-  exposedHeaders: ['Content-Length', 'X-Response-Time'],
+  exposedHeaders: ['Content-Length', 'X-Response-Time', 'x-rtb-fingerprint-id'],
   maxAge: 600
 }));
 
