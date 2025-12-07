@@ -4,14 +4,16 @@
   "description": "",
   "main": "dist/app.js",
   "scripts": {
-  "dev": "nodemon src/app.ts",
-  "postinstall": "prisma generate",
-  "build": "tsc",
-  "start": "node dist/app.js",
-  "migrate": "npx prisma migrate deploy",
-  "vercel-build": "prisma generate && npm run build && npx prisma migrate deploy"
-},
-  "engines": { "node": "18.x" },
+    "dev": "nodemon src/app.ts",
+    "postinstall": "prisma generate",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "migrate": "npx prisma migrate deploy",
+    "vercel-build": "prisma generate && npm run build && npx prisma migrate deploy"
+  },
+  "engines": {
+    "node": "18.x"
+  },
   "author": "AMcinn",
   "license": "ISC",
   "devDependencies": {

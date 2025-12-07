@@ -15,8 +15,13 @@ export const PaymentStatus = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const orderId = searchParams.get('orderId');
+  console.log(orderId);
+
   const status = searchParams.get('status');
+  console.log(status);
+
   const reason = searchParams.get('reason');
+  console.log(reason);
 
   const [booking, setBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
