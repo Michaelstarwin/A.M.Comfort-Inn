@@ -342,14 +342,24 @@ function formatTimeFromDate(date) {
     return `${displayHours}:${displayMinutes} ${ampm}`;
 }
 async function getBookingByOrderId(orderId) {
+    console.log(`[Service] Searching for booking with paymentOrderId: ${orderId}`);
     const booking = await db_1.db.booking.findFirst({
         where: { paymentOrderId: orderId },
         include: { roomInventory: true, user: true },
     });
     if (!booking) {
+        // ✅ Add detailed logging
+        console.error(`[Service] ❌ No booking found for orderId: ${orderId}`);
+        // Debug: Check if order exists in any booking
+        const allBookings = await db_1.db.booking.findMany({
+            select: { bookingId: true, paymentOrderId: true, paymentStatus: true },
+            orderBy: { createdAt: 'desc' },
+            take: 10
+        });
+        console.log('[Service] Recent bookings:', JSON.stringify(allBookings, null, 2));
         return null;
     }
-    // Format the booking data to include time strings
+    console.log(`[Service] ✅ Found booking: ${booking.bookingId} with status: ${booking.paymentStatus}`);
     return {
         ...booking,
         checkInTime: formatTimeFromDate(booking.checkInDate),

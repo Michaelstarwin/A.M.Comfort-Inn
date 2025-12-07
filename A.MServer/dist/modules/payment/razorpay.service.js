@@ -34,20 +34,33 @@ class RazorpayService {
     async createOrder(request) {
         try {
             const { bookingId, amount, currency = 'INR', notes = {} } = request;
-            // 1. Safety Check: Verify booking status first
+            // 1. Verify booking
             const existingBooking = await db_1.db.booking.findUnique({
                 where: { bookingId },
-                select: { paymentStatus: true }
+                select: { paymentStatus: true, paymentOrderId: true }
             });
             if (!existingBooking) {
                 return { success: false, message: 'Booking not found.' };
             }
             if (existingBooking.paymentStatus === client_1.BookingPaymentStatus.Success) {
-                return { success: false, message: 'Booking is already paid. Cannot create new order.' };
+                return { success: false, message: 'Booking is already paid.' };
+            }
+            // ✅ If order already exists, return it (idempotency)
+            if (existingBooking.paymentOrderId) {
+                console.log(`Order already exists for booking ${bookingId}: ${existingBooking.paymentOrderId}`);
+                const razor = this.ensureClient();
+                const existingOrder = await razor.orders.fetch(existingBooking.paymentOrderId);
+                return {
+                    success: true,
+                    data: {
+                        orderId: existingOrder.id,
+                        amount: existingOrder.amount,
+                        currency: existingOrder.currency,
+                        receipt: existingOrder.receipt
+                    }
+                };
             }
             const razor = this.ensureClient();
-            // 2. Currency Conversion: Rupees -> Paise
-            // Razorpay expects amount in smallest currency unit (paise for INR)
             const amountInPaise = Math.round(amount * 100);
             const order = await razor.orders.create({
                 amount: amountInPaise,
@@ -56,21 +69,17 @@ class RazorpayService {
                 notes: { bookingId, ...notes },
                 payment_capture: true
             });
-            try {
-                await db_1.db.booking.update({
-                    where: { bookingId },
-                    data: {
-                        paymentOrderId: order.id,
-                        paymentStatus: client_1.BookingPaymentStatus.Pending,
-                        updatedAt: new Date()
-                    }
-                });
-            }
-            catch (dbErr) {
-                console.error('DB update after order creation failed:', dbErr);
-                // Decide: attempt to cleanup or return partial success. Here we surface error to caller.
-                return { success: false, message: 'Failed to link order with booking', error: dbErr.message };
-            }
+            console.log(`✅ Razorpay order created: ${order.id} for booking: ${bookingId}`);
+            // 2. ✅ ATOMICALLY update booking with orderId
+            const updatedBooking = await db_1.db.booking.update({
+                where: { bookingId },
+                data: {
+                    paymentOrderId: order.id,
+                    paymentStatus: client_1.BookingPaymentStatus.Pending,
+                    updatedAt: new Date()
+                }
+            });
+            console.log(`✅ Booking ${bookingId} linked to order ${order.id}`);
             return {
                 success: true,
                 data: {
@@ -83,7 +92,6 @@ class RazorpayService {
         }
         catch (err) {
             console.error('Razorpay order creation failed:', err);
-            // Return structured error rather than throwing raw error
             return { success: false, message: err.message || 'Failed to create payment order', detail: err };
         }
     }
@@ -130,22 +138,24 @@ class RazorpayService {
      * We use the raw bytes for signature verification to avoid parsing issues.
      */
     async handleWebhook(rawBody, signature) {
-        if (!this.keySecret)
+        if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
             throw new Error('Razorpay webhook secret not configured');
-        // Ensure we have a string or buffer for verification
+        }
         const bodyForVerification = Buffer.isBuffer(rawBody) ? rawBody : JSON.stringify(rawBody);
         try {
             const expectedSignature = crypto_1.default
                 .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
                 .update(bodyForVerification)
                 .digest('hex');
+            console.log('[Webhook Debug] Received signature:', signature);
+            console.log('[Webhook Debug] Expected signature:', expectedSignature);
+            console.log('[Webhook Debug] Body type:', Buffer.isBuffer(rawBody) ? 'Buffer' : typeof rawBody);
             if (expectedSignature !== signature) {
                 throw new Error('Invalid webhook signature');
             }
-            // Parse the body if it's a buffer
             const payload = Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString('utf8')) : rawBody;
             const { event, payload: eventPayload } = payload;
-            console.log(`[Razorpay Webhook] Received event: ${event}`);
+            console.log(`[Razorpay Webhook] ✅ Verified event: ${event}`);
             switch (event) {
                 case 'payment.captured':
                     await this.handlePaymentCaptured(eventPayload.payment.entity);
@@ -154,13 +164,13 @@ class RazorpayService {
                     await this.handlePaymentFailed(eventPayload.payment.entity);
                     break;
                 default:
-                    console.log('Unhandled webhook event:', event);
+                    console.log('[Webhook] Unhandled event:', event);
             }
             return { success: true };
         }
         catch (err) {
-            console.error('Webhook processing failed:', err);
-            throw new Error(err.message || 'Webhook processing failed');
+            console.error('[Webhook] Processing failed:', err.message);
+            throw err;
         }
     }
     async handlePaymentCaptured(payment) {

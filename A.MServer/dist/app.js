@@ -70,7 +70,7 @@ app.use((0, cors_1.default)({
         'X-User-Id',
         'x-rtb-fingerprint-id' // Allow browser fingerprinting headers
     ],
-    exposedHeaders: ['Content-Length', 'X-Response-Time'],
+    exposedHeaders: ['Content-Length', 'X-Response-Time', 'x-rtb-fingerprint-id'],
     maxAge: 600
 }));
 // Pre-flight
@@ -94,10 +94,23 @@ app.get("/api/admin/test", (req, res) => {
     res.json({ message: "Direct route works!" });
 });
 // --- API Routes ---
+app.use('/api/payment', payment_route_1.default);
 app.use("/api/bookings", booking_route_1.default);
 app.use("/api/transactions", transaction_route_1.default);
 app.use("/api/admin", admin_route_1.default);
-app.use('/api/payment', payment_route_1.default);
+console.log('=== REGISTERED ROUTES ===');
+app._router.stack.forEach((middleware) => {
+    if (middleware.route) {
+        console.log(`${Object.keys(middleware.route.methods)} ${middleware.route.path}`);
+    }
+    else if (middleware.name === 'router') {
+        middleware.handle.stack.forEach((handler) => {
+            if (handler.route) {
+                console.log(`${Object.keys(handler.route.methods)} ${middleware.regexp} ${handler.route.path}`);
+            }
+        });
+    }
+});
 console.log("Admin routes mounted:", admin_route_1.default.stack?.length || "Router check");
 // --- Routes debugger ---
 app.get("/_routes", (req, res) => {
@@ -137,7 +150,7 @@ app.use((err, req, res, next) => {
     if (err.name === "ZodError" || err.type === "validation") {
         return res.status(400).json({
             status: "error",
-            message: "Invalid input data",
+            message: `Invalid input data: ${err.message || JSON.stringify(err.errors)}`,
             errors: err.errors || err.message,
         });
     }

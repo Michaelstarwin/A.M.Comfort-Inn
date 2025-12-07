@@ -26,47 +26,25 @@ router.post('/create-order', (0, validate_middleware_1.validate)(payment_validat
 // Verify Route - THE CRITICAL FIX
 router.post('/verify', async (req, res) => {
     try {
-        console.log("--- START PAYMENT VERIFICATION ---");
-        console.log("1. Raw Body received from Frontend:", req.body);
-        // 1. SAFEGUARD: Handle different naming conventions
-        // Frontend might send 'razorpay_payment_id' OR 'paymentId'
-        const paymentId = req.body.razorpay_payment_id || req.body.paymentId;
-        const orderId = req.body.razorpay_order_id || req.body.orderId;
-        const signature = req.body.razorpay_signature || req.body.signature;
-        console.log("2. Extracted Variables:", { paymentId, orderId, signature });
-        // 2. CHECK: Are they missing?
+        console.log("--- PAYMENT VERIFICATION ---");
+        console.log("Received body:", JSON.stringify(req.body, null, 2));
+        const paymentId = req.body.razorpay_payment_id;
+        const orderId = req.body.razorpay_order_id;
+        const signature = req.body.razorpay_signature;
         if (!paymentId || !orderId || !signature) {
-            console.error("FAILED: Missing required payment fields.");
             return res.status(400).json({
                 success: false,
-                message: "Missing required fields: paymentId, orderId, or signature"
+                message: "Missing required payment fields"
             });
         }
-        // 3. EXECUTE: Call the service
-        console.log("3. Calling razorpayService.verifyPayment...");
         const result = await razorpayService.verifyPayment(paymentId, orderId, signature);
-        console.log("--- VERIFICATION SUCCESS ---");
-        console.log("Result:", JSON.stringify(result, null, 2));
         res.json(result);
     }
     catch (error) {
-        console.error('--- VERIFICATION FAILED ---');
-        console.error('Error Message:', error.message);
-        if (error.stack)
-            console.error('Stack:', error.stack);
-        // Log what was actually received to debug if keys were missing
-        console.error('Failed Request Body:', JSON.stringify(req.body, null, 2));
+        console.error('Verification failed:', error.message);
         res.status(400).json({
             success: false,
-            message: error.message || "Payment Verification Failed",
-            debug_info: {
-                received: {
-                    paymentId: req.body.razorpay_payment_id || req.body.paymentId,
-                    orderId: req.body.razorpay_order_id || req.body.orderId,
-                    signature: req.body.razorpay_signature ? 'PRESENT' : 'MISSING'
-                },
-                error: error.message
-            }
+            message: error.message || "Payment verification failed"
         });
     }
 });

@@ -161,26 +161,30 @@ export class RazorpayService {
    * We use the raw bytes for signature verification to avoid parsing issues.
    */
   async handleWebhook(rawBody: any, signature: string) {
-    if (!this.keySecret) throw new Error('Razorpay webhook secret not configured');
+    if (!process.env.RAZORPAY_WEBHOOK_SECRET) {
+      throw new Error('Razorpay webhook secret not configured');
+    }
 
-    // Ensure we have a string or buffer for verification
     const bodyForVerification = Buffer.isBuffer(rawBody) ? rawBody : JSON.stringify(rawBody);
 
     try {
       const expectedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET!)
+        .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET)
         .update(bodyForVerification)
         .digest('hex');
+
+      console.log('[Webhook Debug] Received signature:', signature);
+      console.log('[Webhook Debug] Expected signature:', expectedSignature);
+      console.log('[Webhook Debug] Body type:', Buffer.isBuffer(rawBody) ? 'Buffer' : typeof rawBody);
 
       if (expectedSignature !== signature) {
         throw new Error('Invalid webhook signature');
       }
 
-      // Parse the body if it's a buffer
       const payload = Buffer.isBuffer(rawBody) ? JSON.parse(rawBody.toString('utf8')) : rawBody;
       const { event, payload: eventPayload } = payload;
 
-      console.log(`[Razorpay Webhook] Received event: ${event}`);
+      console.log(`[Razorpay Webhook] ✅ Verified event: ${event}`);
 
       switch (event) {
         case 'payment.captured':
@@ -190,16 +194,15 @@ export class RazorpayService {
           await this.handlePaymentFailed(eventPayload.payment.entity);
           break;
         default:
-          console.log('Unhandled webhook event:', event);
+          console.log('[Webhook] Unhandled event:', event);
       }
 
       return { success: true };
     } catch (err: any) {
-      console.error('Webhook processing failed:', err);
-      throw new Error(err.message || 'Webhook processing failed');
+      console.error('[Webhook] Processing failed:', err.message);
+      throw err;
     }
   }
-
   private async handlePaymentCaptured(payment: any) {
     const razor = this.ensureClient();
 

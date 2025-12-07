@@ -179,39 +179,28 @@ router.get('/', async (req, res) => {
 router.get('/order/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
-    console.log(`[ROUTE HIT] /order/:orderId - Fetching booking for orderId: ${orderId}`);
+    console.log(`[ROUTE /order/:orderId] Fetching booking for orderId: ${orderId}`);
 
     const booking = await BookingService.getBookingByOrderId(orderId);
 
     if (!booking) {
       console.warn(`[ROUTE] No booking found for orderId: ${orderId}`);
-
-      // Debug: Log all recent pending/success bookings
-      const allBookings = await BookingService.getAllBookings();
-      console.log(`[DEBUG] Total bookings in DB: ${allBookings.length}`);
-      console.log(`[DEBUG] Sample bookings:`, allBookings.slice(0, 3).map(b => ({
-        bookingId: b.bookingId,
-        paymentOrderId: (b as any).paymentOrderId,
-        paymentStatus: b.paymentStatus
-      })));
-
       return res.status(404).json({
         success: false,
-        message: 'Booking not found. Please check your email for confirmation or contact support.'
+        message: 'Booking not found for this order ID.'
       });
     }
 
-    console.log(`[ROUTE] Successfully retrieved booking: ${booking.bookingId}`);
+    console.log(`[ROUTE] ✅ Successfully retrieved booking: ${booking.bookingId}`);
     return res.status(200).json({ success: true, data: booking });
   } catch (err: any) {
-    console.error('[ROUTE] Error:', err);
+    console.error('[ROUTE /order/:orderId] Error:', err);
     return res.status(500).json({
       success: false,
-      message: 'Failed to retrieve booking. Please try again later.'
+      message: 'Failed to retrieve booking.'
     });
   }
 });
-
 // Get final booking details by reference number (generic catch-all single segment)
 router.get('/:referenceNumber', async (req, res) => {
   try {
