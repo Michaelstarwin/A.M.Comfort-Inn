@@ -50,7 +50,7 @@ router.post('/verify', async (req, res) => {
 });
 
 // Webhook Route
-router.post('/webhook', express.raw({ type: 'application/json' }), async (req: any, res) => {
+router.post('/webhook', async (req: any, res) => {
   try {
     const signature = (req.headers['x-razorpay-signature'] || '') as string;
 
