@@ -33,7 +33,7 @@ export const PaymentStatus = () => {
     let pollInterval;
     let timeoutTimer;
 
-    // 1. Immediate Failure Handling (No need to poll if URL says active failure)
+    // 1. Immediate Failure Handling
     if (status === 'failed') {
       console.log('[PaymentStatus] URL indicates failure. Showing failed screen immediately.');
       setPaymentStatus('failed');
@@ -46,13 +46,13 @@ export const PaymentStatus = () => {
         if (isMounted) {
           setIsLoading(false);
           setPaymentStatus('error');
-          toast.error('Booking reference not found in URL.');
+          toast.error('Order ID not found in URL. Please check your email.');
         }
         return true; // Stop polling
       }
 
       try {
-        console.log(`[PaymentStatus] Polling booking for orderId: ${orderId}`);
+        console.log(`[PaymentStatus] Fetching booking for orderId: ${orderId}`);
         const response = await bookingApi.getBookingByOrderId(orderId);
 
         if (!isMounted) return true;
@@ -61,13 +61,13 @@ export const PaymentStatus = () => {
           const bookingData = response.data;
           const bookingStatus = bookingData.paymentStatus?.toLowerCase();
 
-          console.log('[PaymentStatus] Retrieved Status:', bookingStatus);
+          console.log('[PaymentStatus] Status:', bookingStatus);
 
           if (bookingStatus === 'success' || bookingStatus === 'confirmed') {
             setBooking(bookingData);
             setPaymentStatus('success');
             setIsLoading(false);
-            toast.success('✅ Payment successful! Your booking is confirmed.');
+            toast.success('✅ Payment successful!');
             return true; // Stop polling
           } else if (bookingStatus === 'failed') {
             setBooking(bookingData);
@@ -77,11 +77,16 @@ export const PaymentStatus = () => {
             return true; // Stop polling
           }
           // If pending, continue polling
+        } else {
+          console.warn('[PaymentStatus] No booking data in response');
         }
       } catch (error) {
-        console.warn('[PaymentStatus] Error polling (will retry):', error.message);
-        // If 404, it might mean the webhook/server is slow to link the order. 
-        // We DO NOT fail immediately on 404 if we expect a success.
+        console.warn('[PaymentStatus] Polling error:', error.message);
+
+        // ✅ If 404, log it but continue polling (webhook might be slow)
+        if (error.statusCode === 404) {
+          console.log('[PaymentStatus] 404 - Booking not found yet, will retry...');
+        }
       }
       return false; // Continue polling
     };
@@ -100,18 +105,17 @@ export const PaymentStatus = () => {
         }
       }, 2000);
 
-      // Stop after 30 seconds (increased from 15s to allow for slower webhooks or network)
+      // Timeout after 45 seconds
       timeoutTimer = setTimeout(() => {
         if (isMounted && isLoading) {
           clearInterval(pollInterval);
           setIsLoading(false);
-          // If we timed out but started with 'success' status in URL (if applicable) or just expect it, 
-          // we might want to show a softer error or just the 'not found' state.
-          // For now, let's set to timeout.
           setPaymentStatus('timeout');
-          toast('Payment verification timed out. Please check your email or contact support.', { icon: '⚠️' });
+          toast('⚠️ Taking longer than expected. Please check your email or contact support.', {
+            duration: 8000
+          });
         }
-      }, 30000);
+      }, 45000);
     };
 
     startPolling();

@@ -123,7 +123,52 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
     return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
   }
 });
+router.get('/order/:orderId', async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    console.log(`\n========================================`);
+    console.log(`[ROUTE] GET /order/:orderId`);
+    console.log(`[ROUTE] Requested orderId: ${orderId}`);
+    console.log(`========================================\n`);
 
+    const booking = await BookingService.getBookingByOrderId(orderId);
+
+    if (!booking) {
+      console.warn(`[ROUTE] ❌ No booking found for orderId: ${orderId}`);
+
+      // Debug: Show recent bookings
+      const recentBookings = await db.booking.findMany({
+        select: {
+          bookingId: true,
+          paymentOrderId: true,
+          paymentStatus: true,
+          createdAt: true
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5
+      });
+
+      console.log('[ROUTE] Recent 5 bookings:');
+      recentBookings.forEach(b => {
+        console.log(`  - OrderID: ${b.paymentOrderId || 'NULL'} | Status: ${b.paymentStatus} | Created: ${b.createdAt.toISOString()}`);
+      });
+
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found for this order ID.'
+      });
+    }
+
+    console.log(`[ROUTE] ✅ Found booking: ${booking.bookingId} | Status: ${booking.paymentStatus}`);
+    return res.status(200).json({ success: true, data: booking });
+  } catch (err: any) {
+    console.error('[ROUTE] Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve booking.'
+    });
+  }
+});
 // Fix for Frontend calling wrong endpoint (backward compatibility/alias)
 router.get('/payment-status/:orderId', async (req, res) => {
   try {
@@ -176,31 +221,7 @@ router.get('/', async (req, res) => {
 });
 
 // Get booking by Razorpay order id (must be before the generic reference route)
-router.get('/order/:orderId', async (req, res) => {
-  try {
-    const orderId = req.params.orderId;
-    console.log(`[ROUTE /order/:orderId] Fetching booking for orderId: ${orderId}`);
 
-    const booking = await BookingService.getBookingByOrderId(orderId);
-
-    if (!booking) {
-      console.warn(`[ROUTE] No booking found for orderId: ${orderId}`);
-      return res.status(404).json({
-        success: false,
-        message: 'Booking not found for this order ID.'
-      });
-    }
-
-    console.log(`[ROUTE] ✅ Successfully retrieved booking: ${booking.bookingId}`);
-    return res.status(200).json({ success: true, data: booking });
-  } catch (err: any) {
-    console.error('[ROUTE /order/:orderId] Error:', err);
-    return res.status(500).json({
-      success: false,
-      message: 'Failed to retrieve booking.'
-    });
-  }
-});
 // Get final booking details by reference number (generic catch-all single segment)
 router.get('/:referenceNumber', async (req, res) => {
   try {
