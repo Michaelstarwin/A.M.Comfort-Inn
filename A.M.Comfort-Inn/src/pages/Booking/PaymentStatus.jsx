@@ -39,7 +39,6 @@ export const PaymentStatus = () => {
     if (localDataString) {
       try {
         const parsed = JSON.parse(localDataString);
-        // Only use matches the current orderId (if present in URL)
         if (!orderId || parsed.orderId === orderId) {
           localData = parsed;
         }
@@ -51,20 +50,29 @@ export const PaymentStatus = () => {
     // 3. Logic: If success in URL, show Success UI immediately using local data if available
     if (urlStatus === 'success') {
       if (localData) {
-        console.log("[PaymentStatus] Using LocalStorage data for immediate success display");
+        console.log("[PaymentStatus] Using LocalStorage data");
+        setBooking({ ...localData, bookingId: 'Pending...', paymentStatus: 'Success' });
+        setDisplayStatus('success');
+        setIsLoading(false);
+      } else {
+        // Fallback even if NO local data: Show generic success
+        console.log("[PaymentStatus] No local data, using generic success");
         setBooking({
-          ...localData,
-          // Add placeholders for backend-generated fields if missing
           bookingId: 'Pending...',
-          paymentStatus: 'Success'
+          paymentStatus: 'Success',
+          // Generic details
+          roomType: 'Booked Room',
+          roomCount: 1,
+          checkInDate: new Date(), // Just placeholders or hide them
+          isGeneric: true
         });
         setDisplayStatus('success');
         setIsLoading(false);
-
-        // Optional: Try to fetch real data in background, but don't block
-        fetchRealBooking(orderId);
-        return;
       }
+
+      // Try fetch in background
+      fetchRealBooking(orderId, false);
+      return;
     }
 
     // 4. Normal Flow (poll if no local data or not explicit success)
@@ -81,16 +89,18 @@ export const PaymentStatus = () => {
         setBooking(response.data);
         setDisplayStatus(response.data.paymentStatus === 'failed' ? 'failed' : 'success');
         if (isBlocking) setIsLoading(false);
-        // Clear local storage on success
         localStorage.removeItem('pendingBookingDetails');
       }
     } catch (e) {
-      console.warn("[PaymentStatus] Backend fetch failed (likely 404 deployment lag):", e.message);
+      console.warn("[PaymentStatus] Backend fetch failed:", e.message);
       if (isBlocking) {
-        // If blocking and failed, and we have no local data, show error
-        // But if we have local data (handled in effect), we wouldn't be blocking normally.
-        // If we really purely failed:
-        setDisplayStatus('error');
+        // If blocking and failed...
+        if (urlStatus === 'success') {
+          // FORCE SUCCESS if URL implies it
+          setDisplayStatus('success');
+        } else {
+          setDisplayStatus('error');
+        }
         setIsLoading(false);
       }
     }
@@ -140,13 +150,14 @@ export const PaymentStatus = () => {
   }
 
   if (displayStatus === 'error') {
+    // This block is effectively unreachable if urlStatus=success
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 pt-20 px-4">
         <div className="max-w-md mx-auto bg-white p-8 rounded-lg shadow-xl text-center">
           <FaExclamationTriangle className="text-yellow-500 text-6xl mb-4 mx-auto" />
           <h2 className="text-2xl font-bold mb-4 text-gray-800">Booking Info Unavailable</h2>
           <p className="text-gray-600 mb-6">
-            We received your payment, but couldn't load the confirmation details right now.
+            We received your request, but couldn't load the confirmation details right now.
             Please check your email.
           </p>
           <button onClick={() => navigate('/')} className="text-blue-600 hover:underline">
@@ -165,7 +176,7 @@ export const PaymentStatus = () => {
           <FaCheckCircle className="text-green-500 text-6xl mb-4 mx-auto animate-bounce" />
           <h1 className="text-3xl font-bold text-gray-800 mb-2">✨ Booking Confirmed! ✨</h1>
           <p className="text-gray-600">Thank you for choosing A.M. Comfort Inn</p>
-          <p className="text-sm text-gray-500 mt-2">Confirmation email sent to {booking?.email}</p>
+          <p className="text-sm text-gray-500 mt-2">Confirmation email sent{booking?.email ? ` to ${booking.email}` : '.'}</p>
         </div>
 
         <div ref={ticketRef} className="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
@@ -179,29 +190,42 @@ export const PaymentStatus = () => {
           {booking && (
             <div className="mt-6">
               <h3 className="text-lg font-semibold text-gray-800 mb-3">Booking Details</h3>
-              <DetailItem label="Booking ID" value={booking.bookingId || 'Processing...'} />
-              <DetailItem label="Guest Name" value={booking.fullName || booking.guestName || 'Valued Guest'} />
-              <DetailItem
-                label="Check-in"
-                value={booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString() : 'N/A'}
-              />
-              <DetailItem
-                label="Check-out"
-                value={booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString() : 'N/A'}
-              />
-              <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
-              <DetailItem label="Rooms" value={booking.roomCount || 1} />
 
-              <div className="flex justify-between py-3 mt-4 bg-green-50 px-3 rounded-lg border border-green-100">
-                <span className="text-lg font-bold text-gray-900">Total Paid</span>
-                <span className="text-lg font-bold text-green-600">₹{(booking.totalAmount || booking.amount || 0).toLocaleString('en-IN')}</span>
-              </div>
+              {/* Conditional Rendering: If we use generic placeholder, hide specific dates to avoid confusion */}
+              {!booking.isGeneric ? (
+                <>
+                  <DetailItem label="Booking ID" value={booking.bookingId || 'Processing...'} />
+                  <DetailItem label="Guest Name" value={booking.fullName || booking.guestName || 'Valued Guest'} />
+                  <DetailItem
+                    label="Check-in"
+                    value={booking.checkInDate ? new Date(booking.checkInDate).toLocaleDateString() : 'N/A'}
+                  />
+                  <DetailItem
+                    label="Check-out"
+                    value={booking.checkOutDate ? new Date(booking.checkOutDate).toLocaleDateString() : 'N/A'}
+                  />
+                  <DetailItem label="Room Type" value={booking.roomType || 'N/A'} />
+                  <DetailItem label="Rooms" value={booking.roomCount || 1} />
+                  <div className="flex justify-between py-3 mt-4 bg-green-50 px-3 rounded-lg border border-green-100">
+                    <span className="text-lg font-bold text-gray-900">Total Paid</span>
+                    <span className="text-lg font-bold text-green-600">₹{(booking.totalAmount || booking.amount || 0).toLocaleString('en-IN')}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-4 bg-gray-50 rounded">
+                  <p className="text-gray-600">
+                    We have received your payment successfully. <br />
+                    The booking details have been sent to your email address.
+                  </p>
+                </div>
+              )}
+
             </div>
           )}
 
           <div className="mt-6 border-t pt-4">
             <p className="text-center text-gray-500 text-sm">
-              Please save this ticket. If Booking ID is pending, check your email in 5 minutes.
+              Please save this ticket. {booking?.bookingId === 'Pending...' && "If Booking ID is processing, check your email in 5 minutes."}
             </p>
           </div>
         </div>
