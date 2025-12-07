@@ -102,14 +102,42 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
       await BookingService.linkOrderToBooking(bookingData.bookingId, result.data.orderId);
     } catch (dbErr: any) {
       // handle unique constraint gracefully if needed
-      console.error('Failed to link order to booking:', dbErr);
-      // still return order info (or decide to rollback)
+      console.error('CRITICAL: Failed to link order to booking:', dbErr);
+      // Return 500 because if we don't link, verification will fail 100% of the time
+      return res.status(500).json({ success: false, message: 'Failed to initialize payment link. Please try again.' });
     }
 
     return res.status(200).json({ success: true, message: 'Payment order created.', data: result.data });
   } catch (error: any) {
     console.error('Create-order route error:', error);
     return res.status(500).json({ success: false, message: error.message || 'Failed to create order' });
+  }
+});
+
+// Fix for Frontend calling wrong endpoint (backward compatibility/alias)
+router.get('/payment-status/:orderId', async (req, res) => {
+  try {
+    const orderId = req.params.orderId;
+    console.log(`[GET /payment-status/:orderId] Fetching booking for orderId: ${orderId}`);
+
+    const booking = await BookingService.getBookingByOrderId(orderId);
+
+    if (!booking) {
+      console.warn(`[GET /payment-status/:orderId] No booking found for orderId: ${orderId}`);
+      return res.status(404).json({
+        success: false,
+        message: 'Booking not found. Please check your email for confirmation or contact support.'
+      });
+    }
+
+    // Return successfully (just mapping to same response structure)
+    return res.status(200).json({ success: true, data: booking });
+  } catch (err: any) {
+    console.error('[GET /payment-status/:orderId] Error:', err);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve booking. Please try again later.'
+    });
   }
 });
 
