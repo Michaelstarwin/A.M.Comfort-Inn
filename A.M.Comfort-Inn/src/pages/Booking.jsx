@@ -87,9 +87,6 @@ const Booking = () => {
 
       const { orderId, amount, currency } = orderResponse.data;
 
-      // ✅ CRITICAL FIX: Store the CURRENT orderId, not an old one
-      console.log(`[Payment] Using orderId from server: ${orderId}`);
-
       if (!window.Razorpay) {
         throw new Error("Razorpay SDK is not loaded. Please check your internet connection.");
       }
@@ -100,49 +97,40 @@ const Booking = () => {
         currency: currency,
         name: "A.M. Comfort Inn",
         description: "Room Booking Payment",
-        order_id: orderId, // ✅ This is the correct orderId from server
+        order_id: orderId,
         handler: async function (response) {
-          // ✅ CRITICAL: Use the orderId from the response, NOT from outer scope
-          const razorpayOrderId = response.razorpay_order_id;
-
-          console.log('[Razorpay Handler] Payment Response:', {
-            payment_id: response.razorpay_payment_id,
-            order_id: razorpayOrderId,
-            signature: response.razorpay_signature?.substring(0, 20) + '...'
-          });
+          console.log('[Razorpay] Full Response:', response);
+          console.log('[Razorpay] Order ID:', response.razorpay_order_id);
 
           toast.loading("Verifying payment...");
           try {
             const verificationResponse = await bookingApi.verifyPayment({
               razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_order_id: razorpayOrderId,
+              razorpay_order_id: response.razorpay_order_id,
               razorpay_signature: response.razorpay_signature,
             });
 
-            console.log('[Verification] Response:', verificationResponse);
+            console.log('[Razorpay] Verification Response:', verificationResponse);
             toast.dismiss();
 
             if (verificationResponse.success) {
               toast.success("🎉 Payment Successful! Your booking is confirmed.");
               setIsLoading(false);
 
-              // ✅ Use the EXACT orderId from Razorpay response
-              console.log(`[Redirect] Using orderId: ${razorpayOrderId}`);
+              // Use the EXACT orderId from response
+              const orderIdToUse = response.razorpay_order_id;
+              console.log(`[Razorpay] Redirecting with orderId: ${orderIdToUse}`);
 
-              // Clear any old cached data
-              localStorage.removeItem('lastBookingRef');
-
-              // Redirect immediately
-              window.location.href = `/booking/payment-status?orderId=${razorpayOrderId}&status=success`;
+              window.location.href = `/booking/payment-status?orderId=${orderIdToUse}&status=success`;
             } else {
-              throw new Error(verificationResponse.message || "Payment verification failed");
+              throw new Error("Payment verification failed");
             }
           } catch (error) {
-            console.error("[Verification] Error:", error);
+            console.error("Payment verification failed:", error);
             toast.dismiss();
             toast.error("❌ Payment verification failed. Please contact support.");
             setIsLoading(false);
-            navigate(`/booking/payment-status?orderId=${razorpayOrderId}&status=failed`);
+            navigate(`/booking/payment-status?orderId=${response.razorpay_order_id}&status=failed`);
           }
         },
         prefill: {
@@ -163,26 +151,21 @@ const Booking = () => {
       };
 
       const razorpay = new window.Razorpay(options);
-
       razorpay.on('payment.failed', function (response) {
-        console.error('[Razorpay] Payment failed:', response.error);
+        console.error('Payment failed:', response.error);
         toast.dismiss();
         toast.error(`❌ Payment Failed: ${response.error.description || "Please try again"}`, {
           duration: 5000,
         });
         setIsLoading(false);
-
-        // Use the orderId from the error response
-        const failedOrderId = response.error.metadata?.order_id || orderId;
+        // Navigate to failure page
         setTimeout(() => {
-          navigate(`/booking/payment-status?orderId=${failedOrderId}&status=failed&reason=${encodeURIComponent(response.error.description || 'Unknown error')}`);
+          navigate(`/booking/payment-status?orderId=${orderId}&status=failed&reason=${encodeURIComponent(response.error.description || 'Unknown error')}`);
         }, 2000);
       });
 
       razorpay.open();
-
-      // ✅ Don't store anything in localStorage - use URL params only
-
+      localStorage.setItem('lastBookingRef', JSON.stringify({ bookingId: orderId, timestamp: Date.now() }));
     } catch (error) {
       toast.dismiss();
       toast.error(error.message || "An unknown error occurred.");
