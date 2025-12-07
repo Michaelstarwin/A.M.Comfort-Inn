@@ -12,6 +12,7 @@ import {
 import { isAdmin } from '../../shared/lib/utils/auth.middleware';
 import { uploadRoomImage } from '../../shared/lib/utils/roomImageUpload';
 import { RazorpayService } from '../payment/razorpay.service';
+import { db } from '../../shared/lib/db';
 
 const router = express.Router();
 const razorpayService = new RazorpayService();
@@ -74,15 +75,13 @@ router.post('/pre-book', validate(preBookSchema), async (req, res) => {
 // FR 3.3: Razorpay Payment Gateway Integration
 router.post('/payment/create-order', validate(createOrderSchema), async (req, res) => {
   try {
-    // bookingData might be { success: true, ... } or { success: false, ... }
     const bookingData: any = await BookingService.createOrder(req.body);
 
     if (!bookingData || bookingData.success === false) {
-      // pass through error message from service
       return res.status(400).json({ success: false, message: bookingData?.message || 'Invalid booking for payment' });
     }
 
-    // Create Razorpay order (payment service returns structured result)
+    // Create Razorpay order
     const result = await razorpayService.createOrder({
       bookingId: bookingData.bookingId,
       amount: bookingData.amount,
@@ -97,15 +96,26 @@ router.post('/payment/create-order', validate(createOrderSchema), async (req, re
       return res.status(400).json({ success: false, message: result?.message || 'Failed to create payment order', detail: result });
     }
 
-    // update booking with order id (do DB update here or inside razorpayService)
-    try {
-      await BookingService.linkOrderToBooking(bookingData.bookingId, result.data.orderId);
-    } catch (dbErr: any) {
-      // handle unique constraint gracefully if needed
-      console.error('CRITICAL: Failed to link order to booking:', dbErr);
-      // Return 500 because if we don't link, verification will fail 100% of the time
-      return res.status(500).json({ success: false, message: 'Failed to initialize payment link. Please try again.' });
+    // ✅ CRITICAL FIX: Ensure order is linked BEFORE returning to frontend
+    // The razorpay service already does this internally, but let's verify it succeeded
+    const linkedBooking = await db.booking.findUnique({
+      where: { bookingId: bookingData.bookingId },
+      select: { paymentOrderId: true }
+    });
+
+    if (!linkedBooking || linkedBooking.paymentOrderId !== result.data.orderId) {
+      console.error('CRITICAL: Order linking verification failed', {
+        bookingId: bookingData.bookingId,
+        expectedOrderId: result.data.orderId,
+        actualOrderId: linkedBooking?.paymentOrderId
+      });
+      return res.status(500).json({
+        success: false,
+        message: 'Payment order created but linking failed. Please try again.'
+      });
     }
+
+    console.log(`✅ Order ${result.data.orderId} successfully linked to booking ${bookingData.bookingId}`);
 
     return res.status(200).json({ success: true, message: 'Payment order created.', data: result.data });
   } catch (error: any) {
@@ -169,22 +179,32 @@ router.get('/', async (req, res) => {
 router.get('/order/:orderId', async (req, res) => {
   try {
     const orderId = req.params.orderId;
-    console.log(`[GET /order/:orderId] Fetching booking for orderId: ${orderId}`);
+    console.log(`[ROUTE HIT] /order/:orderId - Fetching booking for orderId: ${orderId}`);
 
     const booking = await BookingService.getBookingByOrderId(orderId);
 
     if (!booking) {
-      console.warn(`[GET /order/:orderId] No booking found for orderId: ${orderId}`);
+      console.warn(`[ROUTE] No booking found for orderId: ${orderId}`);
+
+      // Debug: Log all recent pending/success bookings
+      const allBookings = await BookingService.getAllBookings();
+      console.log(`[DEBUG] Total bookings in DB: ${allBookings.length}`);
+      console.log(`[DEBUG] Sample bookings:`, allBookings.slice(0, 3).map(b => ({
+        bookingId: b.bookingId,
+        paymentOrderId: (b as any).paymentOrderId,
+        paymentStatus: b.paymentStatus
+      })));
+
       return res.status(404).json({
         success: false,
         message: 'Booking not found. Please check your email for confirmation or contact support.'
       });
     }
 
-    console.log(`[GET /order/:orderId] Successfully retrieved booking: ${booking.bookingId}`);
+    console.log(`[ROUTE] Successfully retrieved booking: ${booking.bookingId}`);
     return res.status(200).json({ success: true, data: booking });
   } catch (err: any) {
-    console.error('[GET /order/:orderId] Error:', err);
+    console.error('[ROUTE] Error:', err);
     return res.status(500).json({
       success: false,
       message: 'Failed to retrieve booking. Please try again later.'

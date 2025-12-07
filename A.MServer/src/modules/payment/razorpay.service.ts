@@ -41,10 +41,10 @@ export class RazorpayService {
     try {
       const { bookingId, amount, currency = 'INR', notes = {} } = request;
 
-      // 1. Safety Check: Verify booking status first
+      // 1. Verify booking
       const existingBooking = await db.booking.findUnique({
         where: { bookingId },
-        select: { paymentStatus: true }
+        select: { paymentStatus: true, paymentOrderId: true }
       });
 
       if (!existingBooking) {
@@ -52,13 +52,26 @@ export class RazorpayService {
       }
 
       if (existingBooking.paymentStatus === BookingPaymentStatus.Success) {
-        return { success: false, message: 'Booking is already paid. Cannot create new order.' };
+        return { success: false, message: 'Booking is already paid.' };
+      }
+
+      // ✅ If order already exists, return it (idempotency)
+      if (existingBooking.paymentOrderId) {
+        console.log(`Order already exists for booking ${bookingId}: ${existingBooking.paymentOrderId}`);
+        const razor = this.ensureClient();
+        const existingOrder = await razor.orders.fetch(existingBooking.paymentOrderId);
+        return {
+          success: true,
+          data: {
+            orderId: existingOrder.id,
+            amount: existingOrder.amount,
+            currency: existingOrder.currency,
+            receipt: existingOrder.receipt
+          }
+        };
       }
 
       const razor = this.ensureClient();
-
-      // 2. Currency Conversion: Rupees -> Paise
-      // Razorpay expects amount in smallest currency unit (paise for INR)
       const amountInPaise = Math.round(amount * 100);
 
       const order = await razor.orders.create({
@@ -69,20 +82,19 @@ export class RazorpayService {
         payment_capture: true
       }) as any;
 
-      try {
-        await db.booking.update({
-          where: { bookingId },
-          data: {
-            paymentOrderId: order.id,
-            paymentStatus: BookingPaymentStatus.Pending,
-            updatedAt: new Date()
-          }
-        });
-      } catch (dbErr: any) {
-        console.error('DB update after order creation failed:', dbErr);
-        // Decide: attempt to cleanup or return partial success. Here we surface error to caller.
-        return { success: false, message: 'Failed to link order with booking', error: dbErr.message };
-      }
+      console.log(`✅ Razorpay order created: ${order.id} for booking: ${bookingId}`);
+
+      // 2. ✅ ATOMICALLY update booking with orderId
+      const updatedBooking = await db.booking.update({
+        where: { bookingId },
+        data: {
+          paymentOrderId: order.id,
+          paymentStatus: BookingPaymentStatus.Pending,
+          updatedAt: new Date()
+        }
+      });
+
+      console.log(`✅ Booking ${bookingId} linked to order ${order.id}`);
 
       return {
         success: true,
@@ -95,7 +107,6 @@ export class RazorpayService {
       };
     } catch (err: any) {
       console.error('Razorpay order creation failed:', err);
-      // Return structured error rather than throwing raw error
       return { success: false, message: err.message || 'Failed to create payment order', detail: err };
     }
   }
