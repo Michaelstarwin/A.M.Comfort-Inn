@@ -95,6 +95,23 @@ export const createOrderSchema = z.object({
 
 export type CreateOrderRequest = z.infer<typeof createOrderSchema.shape.body>;
 
+// New schema for creating order with full booking data (no pre-booking required)
+export const createOrderWithBookingDataSchema = z.object({
+  body: baseBookingFields
+    .extend({
+      guestInfo: z.object({
+        fullName: z.string().min(2, 'Full name is required.'),
+        email: z.string().email('Invalid email address.'),
+        phone: z.string().min(10, 'A valid phone number is required.'),
+        country: z.string().min(2, 'Country is required.'),
+      }),
+      userId: z.string().cuid().optional(),
+    })
+    .superRefine(dateValidation),
+});
+
+export type CreateOrderWithBookingDataRequest = z.infer<typeof createOrderWithBookingDataSchema.shape.body>;
+
 export const createRoomSchema = z.object({
   body: z.object({
     roomType: z.string().min(3, 'Room type must be at least 3 characters long.'),

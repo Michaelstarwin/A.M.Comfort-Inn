@@ -236,7 +236,11 @@ export async function getAvailabilityStatus(request: AvailabilityStatusRequest) 
 }
 
 // --- PreBook ---
+// @deprecated - This function is deprecated. Bookings are now created after successful payment.
+// Kept for backward compatibility only.
 export async function preBook(request: PreBookRequest) {
+  console.warn('[DEPRECATED] preBook() is deprecated. Use createOrderWithBookingData() instead.');
+
   const availability = await checkAvailability(request);
   if (!availability.isAvailable) {
     return { success: false, code: 'NO_AVAILABILITY', message: availability.message, details: availability };
@@ -286,6 +290,70 @@ export async function createOrder(request: CreateOrderRequest) {
   // Return booking metadata for the payment route to create Razorpay order
   return { success: true, bookingId: booking.bookingId, amount: booking.totalAmount, currency: 'INR', guestName: guestInfo.fullName, guestEmail: guestInfo.email };
 }
+
+// --- Create Booking After Payment (New Flow) ---
+export async function createBookingAfterPayment(bookingData: any, paymentId: string, orderId: string) {
+  console.log('[createBookingAfterPayment] Creating booking after successful payment');
+
+  // Check availability one more time before creating the booking
+  const availability = await checkAvailability(bookingData);
+  if (!availability.isAvailable) {
+    throw new Error(`Availability changed: ${availability.message}`);
+  }
+
+  const roomInventory = await db.roomInventory.findFirstOrThrow({
+    where: { roomType: { equals: bookingData.roomType, mode: 'insensitive' } }
+  });
+
+  const { guestInfo, userId, adultCount, childCount } = bookingData;
+
+  // Build booking payload with Success status
+  const bookingPayload: any = {
+    guestInfo: { ...(guestInfo || {}), adultCount, childCount },
+    userId: userId || undefined,
+    checkInDate: new Date(`${bookingData.checkInDate}T${bookingData.checkInTime}`),
+    checkInTime: bookingData.checkInTime,
+    checkOutDate: new Date(`${bookingData.checkOutDate}T${bookingData.checkOutTime}`),
+    checkOutTime: bookingData.checkOutTime,
+    roomCount: bookingData.roomCount,
+    roomType: bookingData.roomType,
+    totalAmount: availability.totalAmount,
+    roomInventoryId: roomInventory.roomId,
+    paymentStatus: BookingPaymentStatus.Success, // ✅ Created as Success
+    paymentId: paymentId,
+    paymentOrderId: orderId,
+  };
+
+  const booking = await db.booking.create({ data: bookingPayload });
+
+  console.log(`[createBookingAfterPayment] ✅ Booking created: ${booking.bookingId} with reference: ${booking.referenceNumber}`);
+
+  // Send confirmation email
+  const recipient = guestInfo?.email;
+  if (recipient) {
+    const bookingDetails = {
+      bookingId: booking.bookingId,
+      checkInDate: booking.checkInDate.toISOString().split('T')[0],
+      checkInTime: booking.checkInTime,
+      checkOutDate: booking.checkOutDate.toISOString().split('T')[0],
+      checkOutTime: booking.checkOutTime,
+      roomType: booking.roomType,
+      roomCount: booking.roomCount,
+      totalAmount: booking.totalAmount,
+      guestInfo,
+    };
+
+    try {
+      await sendBookingConfirmationEmail(recipient, bookingDetails);
+      console.log(`[createBookingAfterPayment] Confirmation email sent to ${recipient}`);
+    } catch (error) {
+      console.error(`[createBookingAfterPayment] Email failed:`, error);
+    }
+  }
+
+  return booking;
+}
+
 
 
 // --- Get Booking by Reference ---

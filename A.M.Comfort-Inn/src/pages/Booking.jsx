@@ -46,14 +46,15 @@ const Booking = () => {
 
   const handleConfirmAndPay = async () => {
     setIsLoading(true);
-    toast.loading("Creating your booking...");
+    toast.loading("Preparing your booking...");
 
     try {
       if (!availabilityData || !guestData) {
         throw new Error("Missing booking information. Please fill in all required details.");
       }
 
-      const preBookRequest = {
+      // ✅ NEW FLOW: Create order directly with full booking data (no pre-booking)
+      const bookingRequest = {
         checkInDate: availabilityData.checkInDate,
         checkInTime: availabilityData.checkInTime,
         checkOutDate: availabilityData.checkOutDate,
@@ -70,16 +71,11 @@ const Booking = () => {
         },
       };
 
-      const preBookResponse = await bookingApi.preBook(preBookRequest);
-      if (!preBookResponse.success) {
-        throw new Error(preBookResponse.message || "Failed to create pending booking.");
-      }
-      const { bookingId } = preBookResponse.data;
       toast.dismiss();
-      toast.success("Booking record created.");
-
       toast.loading("Generating payment order...");
-      const orderResponse = await bookingApi.createOrder({ bookingId });
+
+      // Create order with full booking data
+      const orderResponse = await bookingApi.createOrder(bookingRequest);
       if (!orderResponse.success) {
         throw new Error(orderResponse.message || "Failed to create payment order.");
       }

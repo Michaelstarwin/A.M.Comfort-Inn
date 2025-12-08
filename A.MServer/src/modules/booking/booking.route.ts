@@ -70,8 +70,80 @@ router.post('/pre-book', validate(preBookSchema), async (req, res) => {
   }
 });
 
-router.post('/payment/create-order', validate(createOrderSchema), async (req, res) => {
+router.post('/payment/create-order', async (req, res) => {
   try {
+    // ✅ NEW FLOW: Check if request contains full booking data (new flow)
+    const hasBookingData = req.body.checkInDate && req.body.guestInfo;
+
+    if (hasBookingData) {
+      // New flow: Create order with booking data in notes
+      console.log('[create-order] New flow: Creating order with booking data');
+
+      // Validate booking data
+      const { createOrderWithBookingDataSchema } = await import('./booking.validation');
+      const validationResult = createOrderWithBookingDataSchema.safeParse({ body: req.body });
+
+      if (!validationResult.success) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid booking data',
+          errors: validationResult.error.issues
+        });
+      }
+
+      const bookingData = validationResult.data.body;
+
+      // Check availability
+      const availability = await BookingService.checkAvailability(bookingData);
+      if (!availability.isAvailable) {
+        return res.status(409).json({
+          success: false,
+          message: availability.message,
+          data: availability
+        });
+      }
+
+      // Create Razorpay order with booking data in notes
+      const result = await razorpayService.createOrder({
+        bookingId: `temp_${Date.now()}`, // Temporary ID for receipt
+        amount: availability.totalAmount,
+        currency: 'INR',
+        notes: {
+          bookingData: JSON.stringify(bookingData), // ✅ Store booking data in notes
+          guestName: bookingData.guestInfo.fullName,
+          guestEmail: bookingData.guestInfo.email
+        }
+      });
+
+      if (!result || result.success === false || !result.data) {
+        return res.status(400).json({
+          success: false,
+          message: result?.message || 'Failed to create payment order',
+          detail: result
+        });
+      }
+
+      console.log(`✅ Order ${result.data.orderId} created with booking data in notes`);
+
+      return res.status(200).json({
+        success: true,
+        message: 'Payment order created.',
+        data: result.data
+      });
+    }
+
+    // OLD FLOW: Backward compatibility with bookingId
+    const { createOrderSchema } = await import('./booking.validation');
+    const validationResult = createOrderSchema.safeParse({ body: req.body });
+
+    if (!validationResult.success) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid request',
+        errors: validationResult.error.issues
+      });
+    }
+
     const bookingData: any = await BookingService.createOrder(req.body);
 
     if (!bookingData || bookingData.success === false) {
