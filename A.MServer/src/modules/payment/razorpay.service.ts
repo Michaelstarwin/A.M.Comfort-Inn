@@ -41,7 +41,38 @@ export class RazorpayService {
     try {
       const { bookingId, amount, currency = 'INR', notes = {} } = request;
 
-      // 1. Verify booking exists
+      // ✅ NEW FLOW: Check if bookingData is in notes (skip database check)
+      const hasBookingData = notes.bookingData;
+
+      if (hasBookingData) {
+        console.log('[createOrder] New flow detected: Creating order with booking data in notes');
+
+        const razor = this.ensureClient();
+        const amountInPaise = Math.round(amount * 100);
+
+        // Create order with booking data in notes (no database booking needed)
+        const order = await razor.orders.create({
+          amount: amountInPaise,
+          currency,
+          receipt: `booking_${Date.now()}`, // Use timestamp for receipt
+          notes: notes, // Contains bookingData + guest info
+          payment_capture: true
+        }) as any;
+
+        console.log(`✅ Razorpay order created (new flow): ${order.id}`);
+
+        return {
+          success: true,
+          data: {
+            orderId: order.id,
+            amount: order.amount,
+            currency: order.currency,
+            receipt: order.receipt
+          }
+        };
+      }
+
+      // OLD FLOW: Verify booking exists in database
       const existingBooking = await db.booking.findUnique({
         where: { bookingId },
         select: { paymentStatus: true, paymentOrderId: true }
