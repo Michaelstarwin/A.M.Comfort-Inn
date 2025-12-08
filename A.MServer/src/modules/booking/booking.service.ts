@@ -479,9 +479,8 @@ export async function updateRoomType(roomId: string, data: UpdateRoomRequest) {
 }
 
 export async function deleteRoomType(roomId: string) {
-  return db.roomInventory.update({
+  return db.roomInventory.delete({
     where: { roomId },
-    data: { status: 'Inactive' },
   });
 }
 

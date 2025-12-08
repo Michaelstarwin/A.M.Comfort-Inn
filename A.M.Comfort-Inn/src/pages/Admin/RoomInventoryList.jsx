@@ -2,11 +2,11 @@ import React from 'react';
 import { PencilIcon, TrashIcon } from '@heroicons/react/24/solid';
 
 export const RoomInventoryList = ({ rooms, isLoading, onEdit, onDelete }) => {
-  
+
   if (isLoading) {
     return <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">Loading inventory...</div>;
   }
-  
+
   if (rooms.length === 0) {
     return <div className="bg-white p-6 rounded-lg shadow-md text-center text-gray-600">No room types found. Create one to get started.</div>;
   }
@@ -18,23 +18,21 @@ export const RoomInventoryList = ({ rooms, isLoading, onEdit, onDelete }) => {
         {rooms.map((room) => (
           <div key={room.roomId} className="bg-white rounded-lg shadow-md overflow-hidden hover:shadow-lg transition">
             {/* Room Image */}
-            {room.imageUrl && (
-              <img
-                src={room.imageUrl}
-                alt={room.roomType}
-                className="w-full h-48 object-cover"
-              />
-            )}
-            {!room.imageUrl && (
-              <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-500">No image</span>
-              </div>
-            )}
+            <img
+              src={room.imageUrl || (room.roomType.toLowerCase().includes('standard') ? "https://www.amcinn.in/Image5.jpeg" : "https://www.amcinn.in/Bedroom.jpeg")}
+              alt={room.roomType}
+              className="w-full h-48 object-cover"
+              onError={(e) => {
+                if (e.target.src !== "https://www.amcinn.in/Bedroom.jpeg") {
+                  e.target.src = "https://www.amcinn.in/Bedroom.jpeg";
+                }
+              }}
+            />
 
             {/* Room Details */}
             <div className="p-4">
               <h3 className="text-lg font-semibold text-gray-800 mb-2">{room.roomType}</h3>
-              
+
               {room.description && (
                 <p className="text-sm text-gray-600 mb-3 line-clamp-2">{room.description}</p>
               )}
@@ -50,9 +48,8 @@ export const RoomInventoryList = ({ rooms, isLoading, onEdit, onDelete }) => {
                 </div>
                 <div>
                   <p className="text-gray-600">Status</p>
-                  <span className={`text-xs font-semibold px-2 py-1 rounded ${
-                    room.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`text-xs font-semibold px-2 py-1 rounded ${room.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {room.status}
                   </span>
                 </div>
@@ -97,14 +94,16 @@ export const RoomInventoryList = ({ rooms, isLoading, onEdit, onDelete }) => {
             {rooms.map((room) => (
               <tr key={room.roomId} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {room.imageUrl && (
-                    <img src={room.imageUrl} alt={room.roomType} className="h-10 w-10 rounded object-cover" />
-                  )}
-                  {!room.imageUrl && (
-                    <div className="h-10 w-10 bg-gray-200 rounded flex items-center justify-center text-xs text-gray-500">
-                      No img
-                    </div>
-                  )}
+                  <img
+                    src={room.imageUrl || (room.roomType.toLowerCase().includes('standard') ? "https://www.amcinn.in/Image5.jpeg" : "https://www.amcinn.in/Bedroom.jpeg")}
+                    alt={room.roomType}
+                    className="h-10 w-10 rounded object-cover"
+                    onError={(e) => {
+                      if (e.target.src !== "https://www.amcinn.in/Bedroom.jpeg") {
+                        e.target.src = "https://www.amcinn.in/Bedroom.jpeg";
+                      }
+                    }}
+                  />
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm font-medium text-gray-900">{room.roomType}</div>
@@ -116,9 +115,8 @@ export const RoomInventoryList = ({ rooms, isLoading, onEdit, onDelete }) => {
                   <div className="text-sm text-gray-900">{room.totalRooms}</div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    room.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                  }`}>
+                  <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${room.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                    }`}>
                     {room.status}
                   </span>
                 </td>
