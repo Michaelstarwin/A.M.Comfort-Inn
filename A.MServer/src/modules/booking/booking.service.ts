@@ -123,13 +123,21 @@ export async function checkAvailability(request: CheckAvailabilityRequest) {
       return { isAvailable: false, totalAmount: 0, ratePerNight: 0, availableRooms: 0, message: 'Max adults allowed in Deluxe Room is 6.' };
     }
 
-    // Pricing Rules
-    // <= 8 guests: 4500
-    // 9 guests: 5000
-    // 10 guests: 5500
-    let nightlyRate = 4500;
-    if (totalPax === 9) nightlyRate = 5000;
-    if (totalPax === 10) nightlyRate = 5500;
+    // Pricing Rules - Dynamic based on DB Rate
+    // If DB Rate is for example 4500:
+    // <= 8 guests: Base Rate (4500)
+    // 9 guests: Base Rate + Surcharge (e.g. 500)
+    // 10 guests: Base Rate + 2*Surcharge (e.g. 1000)
+
+    // We assume the DB rate IS the "base package rate" (e.g. 4500 in original code)
+    const basePackageRate = roomInventory.currentRate;
+    const surchargePerGuest = 500;
+
+    let nightlyRate = basePackageRate;
+
+    // Apply logic: For 9th and 10th guest, add surcharge
+    if (totalPax === 9) nightlyRate = basePackageRate + surchargePerGuest;
+    if (totalPax === 10) nightlyRate = basePackageRate + (2 * surchargePerGuest);
 
     const totalAmount = nightlyRate * nights;
 
