@@ -148,6 +148,41 @@ export class RazorpayService {
       }
 
       const order = await razor.orders.fetch(orderId);
+
+      // ✅ NEW FLOW: Check if booking data is in order notes (new flow)
+      const bookingDataInNotes = order.notes?.bookingData;
+
+      if (bookingDataInNotes) {
+        // New flow: Create booking after payment
+        console.log('[verifyPayment] Creating booking from order notes (new flow)');
+
+        try {
+          const bookingData = typeof bookingDataInNotes === 'string'
+            ? JSON.parse(bookingDataInNotes)
+            : bookingDataInNotes;
+
+          // Import and use createBookingAfterPayment
+          const { createBookingAfterPayment } = await import('../booking/booking.service');
+          const newBooking = await createBookingAfterPayment(bookingData, paymentId, orderId);
+
+          const paymentAmount = typeof payment.amount === 'number' ? payment.amount / 100 : 0;
+
+          return {
+            success: true,
+            data: {
+              bookingId: newBooking.bookingId,
+              paymentId,
+              amount: paymentAmount,
+              status: payment.status
+            }
+          };
+        } catch (error: any) {
+          console.error('[verifyPayment] Failed to create booking from notes:', error);
+          throw new Error(`Failed to create booking: ${error.message}`);
+        }
+      }
+
+      // OLD FLOW: Booking ID in notes (backward compatibility)
       const bookingId = order.notes?.bookingId as string | undefined;
       if (!bookingId) {
         throw new Error('Booking ID not found in order notes');
@@ -244,14 +279,45 @@ export class RazorpayService {
   private async handlePaymentCaptured(payment: any) {
     const razor = this.ensureClient();
 
-    // 1. Fetch order to get bookingId from notes
-    // (Ideally, payment entity has notes too, but order notes are more reliable if payment notes were missed)
-    let bookingId = payment.notes?.bookingId;
+    // Fetch order to get booking data or bookingId from notes
+    const order = await razor.orders.fetch(payment.order_id);
 
-    if (!bookingId) {
-      const order = await razor.orders.fetch(payment.order_id);
-      bookingId = order.notes?.bookingId as string | undefined;
+    // ✅ NEW FLOW: Check if booking data is in order notes
+    const bookingDataInNotes = order.notes?.bookingData;
+
+    if (bookingDataInNotes) {
+      console.log('[Webhook] Creating booking from order notes (new flow)');
+
+      try {
+        const bookingData = typeof bookingDataInNotes === 'string'
+          ? JSON.parse(bookingDataInNotes)
+          : bookingDataInNotes;
+
+        // Check if booking already exists for this order (idempotency)
+        const { db } = await import('../../shared/lib/db');
+        const existingBooking = await db.booking.findFirst({
+          where: { paymentOrderId: payment.order_id }
+        });
+
+        if (existingBooking) {
+          console.log(`[Webhook] Booking already exists for order ${payment.order_id}: ${existingBooking.bookingId}`);
+          return;
+        }
+
+        // Create booking after payment
+        const { createBookingAfterPayment } = await import('../booking/booking.service');
+        await createBookingAfterPayment(bookingData, payment.id, payment.order_id);
+
+        console.log(`[Webhook] ✅ Booking created successfully for payment ${payment.id}`);
+        return;
+      } catch (error: any) {
+        console.error('[Webhook] Failed to create booking from notes:', error);
+        return;
+      }
     }
+
+    // OLD FLOW: Booking ID in notes (backward compatibility)
+    let bookingId = payment.notes?.bookingId || order.notes?.bookingId;
 
     if (!bookingId) {
       console.error(`[Webhook] Booking ID missing for payment ${payment.id}`);
