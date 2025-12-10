@@ -193,8 +193,24 @@ export class RazorpayService {
             : bookingDataInNotes;
 
           // Import and use createBookingAfterPayment
-          const { createBookingAfterPayment } = await import('../booking/booking.service');
-          const newBooking = await createBookingAfterPayment(bookingData, paymentId, orderId);
+            const { createBookingAfterPayment } = await import('../booking/booking.service');
+            let newBooking;
+            try {
+              newBooking = await createBookingAfterPayment(bookingData, paymentId, orderId);
+            } catch (err: any) {
+              // Handle duplicate-booking race: if booking already exists for this orderId, return it
+              if (err?.code === 'P2002' || /Unique constraint failed/.test(err?.message || '')) {
+                console.warn('[verifyPayment] Detected P2002 while creating booking; fetching existing booking');
+                const existing = await db.booking.findFirst({ where: { paymentOrderId: orderId } });
+                if (existing) {
+                  newBooking = existing;
+                } else {
+                  throw err; // rethrow if we can't recover
+                }
+              } else {
+                throw err;
+              }
+            }
 
           const paymentAmount = typeof payment.amount === 'number' ? payment.amount / 100 : 0;
 
