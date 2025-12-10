@@ -424,42 +424,38 @@ async function markBookingAsPaid(bookingId: string, paymentId?: string): Promise
     data: updateData
   });
 
-  // ✅ Emails are now sent ONLY by createBookingAfterPayment() during new flow
-  // ✅ OLD FLOW: For backward compatibility with existing bookings, send email here
-  console.log(`[Razorpay Service] Sending confirmation email for OLD FLOW booking: ${bookingId}`);
-  const { sendAdminNotificationEmail } = await import('../../shared/lib/utils/sendEmail');
-
-  const guestInfo = updatedBooking.guestInfo as any;
-  const recipient = guestInfo?.email;
-
-  if (recipient) {
-    const bookingDetails = {
-      bookingId: updatedBooking.bookingId,
-      referenceNumber: updatedBooking.referenceNumber,
-      checkInDate: updatedBooking.checkInDate.toISOString().split('T')[0],
-      checkInTime: updatedBooking.checkInTime,
-      checkOutDate: updatedBooking.checkOutDate.toISOString().split('T')[0],
-      checkOutTime: updatedBooking.checkOutTime,
-      roomType: updatedBooking.roomType,
-      roomCount: updatedBooking.roomCount,
-      totalAmount: updatedBooking.totalAmount,
-      guestInfo,
-    };
-
-    try {
-      await sendBookingConfirmationEmail(recipient, bookingDetails);
-      console.log(`[Razorpay Service] ✅ User confirmation email sent for booking ${bookingId}`);
-    } catch (error) {
-      console.error(`[Razorpay Service] ❌ User email failed for booking ${bookingId}:`, error);
-    }
-
-    try {
-      await sendAdminNotificationEmail(bookingDetails);
-      console.log(`[Razorpay Service] ✅ Admin notification sent for booking ${bookingId}`);
-    } catch (error) {
-      console.error(`[Razorpay Service] ❌ Admin notification failed for booking ${bookingId}:`, error);
-    }
-  }
+  await sendConfirmationEmail(updatedBooking);
 
   return updatedBooking;
+}
+
+async function sendConfirmationEmail(booking: Booking) {
+  const guestInfo = booking.guestInfo as GuestInfo | null;
+  const recipient = guestInfo?.email;
+
+  if (!recipient) {
+    console.warn(`[Razorpay Service] Booking ${booking.bookingId} does not have an email address. Skipping confirmation email.`);
+    return;
+  }
+
+  console.log(`[Razorpay Service] Preparing to send confirmation email to ${recipient} for booking ${booking.bookingId}`);
+
+  const bookingDetails = {
+    bookingId: booking.bookingId,
+    checkInDate: booking.checkInDate.toISOString().split('T')[0],
+    checkInTime: booking.checkInTime,
+    checkOutDate: booking.checkOutDate.toISOString().split('T')[0],
+    checkOutTime: booking.checkOutTime,
+    roomType: booking.roomType,
+    roomCount: booking.roomCount,
+    totalAmount: booking.totalAmount,
+    guestInfo,
+  };
+
+  try {
+    await sendBookingConfirmationEmail(recipient, bookingDetails);
+    console.log(`[Razorpay Service] Confirmation email sent successfully for booking ${booking.bookingId}`);
+  } catch (error) {
+    console.error(`[Razorpay Service] Booking confirmation email failed for booking ${booking.bookingId}:`, error);
+  }
 }

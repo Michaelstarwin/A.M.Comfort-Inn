@@ -2,7 +2,7 @@ import { PrismaClient, BookingPaymentStatus } from '@prisma/client';
 import crypto from 'crypto';
 import { CheckAvailabilityRequest, AvailabilityStatusRequest, PreBookRequest, CreateOrderRequest, CreateRoomRequest, UpdateRoomRequest } from './booking.validation';
 import { db } from '../../shared/lib/db';
-import { sendBookingConfirmationEmail, sendAdminNotificationEmail } from '../../shared/lib/utils/sendEmail';
+import { sendBookingConfirmationEmail } from '../../shared/lib/utils/sendEmail';
 
 // --- Razorpay Configuration ---
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
@@ -238,10 +238,8 @@ export async function getAvailabilityStatus(request: AvailabilityStatusRequest) 
 // --- PreBook ---
 // @deprecated - This function is deprecated. Bookings are now created after successful payment.
 // Kept for backward compatibility only.
-// ⚠️ NO EMAILS ARE SENT HERE - Only send emails after payment is confirmed (Success status)
 export async function preBook(request: PreBookRequest) {
   console.warn('[DEPRECATED] preBook() is deprecated. Use createOrderWithBookingData() instead.');
-  console.log('[preBook] ⚠️ This creates a PENDING booking. Emails will be sent only AFTER payment confirmation.');
 
   const availability = await checkAvailability(request);
   if (!availability.isAvailable) {
@@ -266,12 +264,11 @@ export async function preBook(request: PreBookRequest) {
     roomType: request.roomType,
     totalAmount: availability.totalAmount,
     roomInventoryId: roomInventory.roomId,
-    paymentStatus: BookingPaymentStatus.Pending, // ✅ PENDING, NOT CONFIRMED
+    paymentStatus: BookingPaymentStatus.Pending,
   };
 
+  // Consider wrapping the create in a transaction if you later will immediately create payment order
   const booking = await db.booking.create({ data: bookingPayload });
-
-  console.log(`[preBook] Booking created with PENDING status: ${booking.bookingId} - NO EMAILS SENT`);
 
   return { success: true, bookingId: booking.bookingId, totalAmount: booking.totalAmount };
 }
@@ -331,12 +328,11 @@ export async function createBookingAfterPayment(bookingData: any, paymentId: str
 
   console.log(`[createBookingAfterPayment] ✅ Booking created: ${booking.bookingId} with reference: ${booking.referenceNumber}`);
 
-  // Send emails ONLY when booking is confirmed (Success status)
+  // Send confirmation email
   const recipient = guestInfo?.email;
   if (recipient) {
     const bookingDetails = {
       bookingId: booking.bookingId,
-      referenceNumber: booking.referenceNumber,
       checkInDate: booking.checkInDate.toISOString().split('T')[0],
       checkInTime: booking.checkInTime,
       checkOutDate: booking.checkOutDate.toISOString().split('T')[0],
@@ -347,23 +343,12 @@ export async function createBookingAfterPayment(bookingData: any, paymentId: str
       guestInfo,
     };
 
-    // Send confirmation email to USER
     try {
       await sendBookingConfirmationEmail(recipient, bookingDetails);
-      console.log(`[createBookingAfterPayment] ✅ Confirmation email sent to user: ${recipient}`);
+      console.log(`[createBookingAfterPayment] Confirmation email sent to ${recipient}`);
     } catch (error) {
-      console.error(`[createBookingAfterPayment] ❌ User email failed:`, error);
+      console.error(`[createBookingAfterPayment] Email failed:`, error);
     }
-
-    // Send admin notification to OWNER
-    try {
-      await sendAdminNotificationEmail(bookingDetails);
-      console.log(`[createBookingAfterPayment] ✅ Admin notification sent`);
-    } catch (error) {
-      console.error(`[createBookingAfterPayment] ❌ Admin notification failed:`, error);
-    }
-  } else {
-    console.warn('[createBookingAfterPayment] ⚠️ No guest email found, skipping email notifications');
   }
 
   return booking;
