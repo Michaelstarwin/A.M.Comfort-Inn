@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateRoomSchema = exports.createRoomSchema = exports.createOrderSchema = exports.preBookSchema = exports.availabilityStatusSchema = exports.checkAvailabilitySchema = void 0;
+exports.updateRoomSchema = exports.createRoomSchema = exports.createOrderWithBookingDataSchema = exports.createOrderSchema = exports.preBookSchema = exports.availabilityStatusSchema = exports.checkAvailabilitySchema = void 0;
 // booking.validation.ts
 const zod_1 = require("zod");
 // Validate time in HH:MM:SS
@@ -78,6 +78,20 @@ exports.createOrderSchema = zod_1.z.object({
     body: zod_1.z.object({
         bookingId: zod_1.z.string().cuid('A valid booking ID is required.'),
     }),
+});
+// New schema for creating order with full booking data (no pre-booking required)
+exports.createOrderWithBookingDataSchema = zod_1.z.object({
+    body: baseBookingFields
+        .extend({
+        guestInfo: zod_1.z.object({
+            fullName: zod_1.z.string().min(2, 'Full name is required.'),
+            email: zod_1.z.string().email('Invalid email address.'),
+            phone: zod_1.z.string().min(10, 'A valid phone number is required.'),
+            country: zod_1.z.string().min(2, 'Country is required.'),
+        }),
+        userId: zod_1.z.string().cuid().optional(),
+    })
+        .superRefine(dateValidation),
 });
 exports.createRoomSchema = zod_1.z.object({
     body: zod_1.z.object({
