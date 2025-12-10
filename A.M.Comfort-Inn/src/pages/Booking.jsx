@@ -88,7 +88,7 @@ const Booking = () => {
       }
 
       const options = {
-        key: "rzp_test_RokXble16ygfaW",
+        key: "rzp_live_RgjfGSw269T1W4",
         amount: amount,
         currency: currency,
         name: "A.M. Comfort Inn",
