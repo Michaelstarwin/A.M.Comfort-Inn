@@ -285,7 +285,27 @@ async function createBookingAfterPayment(bookingData, paymentId, orderId) {
         paymentId: paymentId,
         paymentOrderId: orderId,
     };
-    const booking = await db_1.db.booking.create({ data: bookingPayload });
+    // Idempotency: if a booking already exists for this orderId, return it instead of creating a duplicate
+    const existing = await db_1.db.booking.findFirst({ where: { paymentOrderId: orderId } });
+    if (existing) {
+        console.log(`[createBookingAfterPayment] Booking already exists for order ${orderId}: ${existing.bookingId}`);
+        return existing;
+    }
+
+    let booking;
+    try {
+        booking = await db_1.db.booking.create({ data: bookingPayload });
+    }
+    catch (err) {
+        if ((err === null || err === void 0 ? void 0 : err.code) === 'P2002') {
+            console.warn('[createBookingAfterPayment] Unique constraint failed when creating booking, fetching existing record');
+            const existingAfter = await db_1.db.booking.findFirst({ where: { paymentOrderId: orderId } });
+            if (existingAfter)
+                return existingAfter;
+        }
+        throw err;
+    }
+
     console.log(`[createBookingAfterPayment] ✅ Booking created: ${booking.bookingId} with reference: ${booking.referenceNumber}`);
     // Send confirmation email
     const recipient = guestInfo?.email;
